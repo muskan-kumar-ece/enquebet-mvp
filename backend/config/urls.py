@@ -5,9 +5,30 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+
+
+def database_status(request):
+    """Return which database backend is currently active (staff only)."""
+    if not (request.user and request.user.is_authenticated and request.user.is_staff):
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=403)
+    engine = settings.DATABASES['default']['ENGINE']
+    if 'sqlite' in engine:
+        db_type = 'sqlite'
+        db_label = 'SQLite (local)'
+    elif 'postgresql' in engine or 'postgis' in engine:
+        db_type = 'postgresql'
+        db_label = 'PostgreSQL (Supabase)'
+    else:
+        db_type = engine.rsplit('.', 1)[-1]
+        db_label = engine
+    return JsonResponse({'database': db_type, 'label': db_label})
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/status/', database_status),
+    path('api/status/', database_status),
     path('api/v1/auth/', include('apps.users.urls')),
     path('api/v1/users/', include('apps.users.public_urls')),
     path('api/v1/posts/', include('apps.posts.urls')),
