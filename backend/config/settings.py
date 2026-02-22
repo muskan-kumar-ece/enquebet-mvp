@@ -6,8 +6,6 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 import dj_database_url
-import socket
-from urllib.parse import urlparse
 from datetime import timedelta
 
 load_dotenv()
@@ -116,18 +114,9 @@ force_sqlite = os.getenv('USE_SQLITE', '').strip().lower() in ('1', 'true', 'yes
 if force_sqlite:
     DATABASES = _use_sqlite_database()
 elif database_url:
-    # If the configured DB host isn't reachable (common in offline/dev setups), fall back to SQLite.
-    try:
-        parsed = urlparse(database_url)
-        hostname = parsed.hostname
-        if hostname:
-            socket.gethostbyname(hostname)
-        DATABASES = {
-            'default': dj_database_url.parse(database_url, conn_max_age=600)
-        }
-    except Exception:
-        # Keep dev/test usable without external connectivity.
-        DATABASES = _use_sqlite_database()
+    DATABASES = {
+        'default': dj_database_url.parse(database_url, conn_max_age=600)
+    }
 else:
     DATABASES = _use_sqlite_database()
 
