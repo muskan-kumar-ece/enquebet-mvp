@@ -1,0 +1,20 @@
+Django==5.0.1
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.0
+django-cors-headers==4.3.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+cloudinary==1.37.0
+django-cloudinary-storage==0.3.0
+dj-database-url==2.1.0
+redis==5.0.1
+gunicorn==21.2.0
+pillow==10.1.0
+
+# WebSocket support
+channels==4.0.0
+daphne==4.0.0
+channels-redis==4.1.0
+
+# Static file serving (for daphne/ASGI)
+whitenoise==6.6.0
