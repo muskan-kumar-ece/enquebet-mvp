@@ -54,7 +54,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         if not request or not getattr(request, 'user', None) or request.user.is_anonymous:
             return 0
 
-        member = obj.members.filter(user=request.user).only('last_read_at').first()
+        member = ConversationMember.objects.filter(conversation=obj, user=request.user).only('last_read_at').first()
         if not member:
             return 0
 
