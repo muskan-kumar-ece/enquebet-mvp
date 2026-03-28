@@ -4,6 +4,8 @@ Collaborative idea-building platform monorepo.
 
 ENQUEbet is a web platform for posting ideas, forming teams, and collaborating on projects—combining features of LinkedIn, GitHub, and Discord to turn ideas into real projects.
 
+Users can share research, communicate in real time, and build professional portfolios while working together on innovative projects. The platform supports public, college, and open collaboration modes, making it easy to find the right teammates. ENQUEbet's mission is to transform ideas into impactful, real-world outcomes through seamless teamwork.
+
 ## Structure
 
 ```
