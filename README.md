@@ -2,6 +2,8 @@
 
 Collaborative idea-building platform monorepo.
 
+ENQUEbet is a web platform for posting ideas, forming teams, and collaborating on projects—combining features of LinkedIn, GitHub, and Discord to turn ideas into real projects.
+
 ## Structure
 
 ```
