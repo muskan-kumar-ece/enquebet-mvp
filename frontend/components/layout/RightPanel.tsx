@@ -66,12 +66,18 @@ export default function RightPanel() {
                                 <h3 className="font-bold text-base">{user.full_name || user.username}</h3>
                                 <p className="text-text-muted text-xs">@{user.username}</p>
 
+                                {user.headline && (
+                                    <p className="text-purple-light text-xs font-medium text-center mt-1 px-2 line-clamp-2">
+                                        {user.headline}
+                                    </p>
+                                )}
+
                                 {displayBio && (
                                     <p className="text-text-secondary text-xs text-center mt-2 leading-relaxed">{displayBio}</p>
                                 )}
 
                                 {/* Stats */}
-                                <div className="flex gap-6 mt-3 text-sm">
+                                <div className="flex gap-4 mt-3 text-sm">
                                     <div className="text-center">
                                         <div className="font-bold text-sm">{user.followers_count ?? 0}</div>
                                         <div className="text-text-muted text-[10px] uppercase tracking-wider">Followers</div>
@@ -80,7 +86,23 @@ export default function RightPanel() {
                                         <div className="font-bold text-sm">{user.following_count ?? 0}</div>
                                         <div className="text-text-muted text-[10px] uppercase tracking-wider">Following</div>
                                     </div>
+                                    <div className="text-center">
+                                        <div className="font-bold text-sm text-purple-light">{user.reputation_score ?? 0}</div>
+                                        <div className="text-text-muted text-[10px] uppercase tracking-wider">Rep</div>
+                                    </div>
                                 </div>
+
+                                {user.completeness_score !== undefined && user.completeness_score < 100 && (
+                                    <Link href="/profile" className="w-full mt-3 px-3 py-1.5 rounded-lg bg-bg-card-elevated border border-border-default hover:border-purple/40 transition-colors block">
+                                        <div className="flex justify-between items-center text-[11px] mb-1">
+                                            <span className="text-text-secondary">Profile Setup</span>
+                                            <span className="text-purple-light font-semibold">{user.completeness_score}%</span>
+                                        </div>
+                                        <div className="w-full h-1.5 bg-bg-primary rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-purple to-primary rounded-full transition-all duration-300" style={{ width: `${user.completeness_score}%` }} />
+                                        </div>
+                                    </Link>
+                                )}
 
                                 {/* Real Skills */}
                                 {skills && (

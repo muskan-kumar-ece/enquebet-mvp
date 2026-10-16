@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Heart, MessageCircle, Share2, Users, Send, ArrowLeft, MessageSquare, Bookmark, Check, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Heart, MessageCircle, Share2, Users, Send, ArrowLeft, MessageSquare, Bookmark, Check, Trash2, Kanban } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -281,12 +282,21 @@ export default function PostDetailPage() {
                             <span>Share</span>
                         </button>
 
+                        {/* Project Workspace Link */}
+                        <Link
+                            href={`/workspace/${post.id}`}
+                            className="btn-secondary text-xs flex items-center gap-1.5 ml-auto py-1.5 px-3"
+                        >
+                            <Kanban className="w-3.5 h-3.5 text-purple" />
+                            <span>Workspace</span>
+                        </Link>
+
                         {/* Build With — only for other users' posts */}
                         {!isOwnPost && (
                             <button
                                 onClick={handleCollabRequest}
                                 disabled={sendingRequest || post.has_requested_collaboration}
-                                className={`flex items-center gap-2 transition-colors ml-auto font-medium ${post.has_requested_collaboration
+                                className={`flex items-center gap-2 transition-colors font-medium ${post.has_requested_collaboration
                                     ? 'text-green-500 cursor-default'
                                     : 'text-purple hover:text-purple-light'
                                     }`}

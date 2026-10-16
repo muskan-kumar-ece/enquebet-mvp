@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, RefreshCw, ShoppingCart, FileText, Settings, Users, Menu, X } from 'lucide-react';
+import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, RefreshCw, ShoppingCart, FileText, Settings, Users, Menu, X, Kanban } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWebSocket } from '@/lib/contexts/WebSocketContext';
@@ -13,6 +13,7 @@ const coreNavItems = [
     { icon: MessageSquare, label: 'Messages', href: '/messages' },
     { icon: Bell, label: 'Notifications', href: '/notifications' },
     { icon: Users, label: 'Build With', href: '/collaboration' },
+    { icon: Kanban, label: 'Workspaces', href: '/workspaces' },
     { icon: User, label: 'Profile', href: '/profile' },
 ];
 

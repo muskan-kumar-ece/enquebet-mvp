@@ -13,5 +13,6 @@ urlpatterns = [
     # Spec-friendly aliases (information.md examples)
     path('accept/', views.AcceptCollaborationAliasView.as_view(), name='accept_request_alias'),
     path('decline/', views.DeclineCollaborationAliasView.as_view(), name='decline_request_alias'),
+    path('cancel/', views.CancelCollaborationRequestView.as_view(), name='cancel_request_alias'),
     path('my-requests/', views.MyCollaborationRequestsView.as_view(), name='my_requests'),
 ]

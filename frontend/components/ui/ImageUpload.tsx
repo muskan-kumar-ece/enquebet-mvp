@@ -22,7 +22,7 @@ function getCloudinaryConfig() {
 
 /** Try uploading through the backend /api/v1/uploads/image/ endpoint */
 async function uploadViaBackend(file: File): Promise<string> {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/+$/, '');
     const token = typeof window !== 'undefined'
         ? localStorage.getItem('accessToken')
         : null;
@@ -325,3 +325,102 @@ export function AvatarUpload({ onImageUploaded, currentImage }: ImageUploadProps
         </div>
     );
 }
+
+// Cover image upload banner variant
+export function CoverUpload({ onImageUploaded, currentImage, className = '' }: ImageUploadProps) {
+    const [uploading, setUploading] = useState(false);
+    const [preview, setPreview] = useState<string | null>(currentImage || null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select an image file');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image must be less than 5MB');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+
+        setUploading(true);
+        try {
+            const { cloudName, uploadPreset, isConfigured } = getCloudinaryConfig();
+            let url: string;
+
+            if (isConfigured) {
+                try {
+                    url = await uploadImage(file, cloudName, uploadPreset);
+                } catch (cloudErr) {
+                    console.warn('Cloudinary direct upload failed, trying backend fallback:', cloudErr);
+                    url = await uploadViaBackend(file);
+                }
+            } else {
+                url = await uploadViaBackend(file);
+            }
+
+            onImageUploaded(url);
+            toast.success('Cover image updated!');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to upload cover image';
+            console.warn('Cover upload failed:', message);
+            toast.error(message || 'Failed to upload cover image');
+            setPreview(null);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div className={`relative w-full h-36 sm:h-44 md:h-52 rounded-t-xl overflow-hidden bg-gradient-to-r from-purple/30 via-primary/20 to-purple/10 ${className}`}>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={uploading}
+            />
+
+            {preview && (
+                <img
+                    src={preview}
+                    alt="Cover banner"
+                    className="w-full h-full object-cover"
+                />
+            )}
+
+            {/* Overlay button */}
+            <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center gap-2 px-4 py-2 bg-bg-card/90 hover:bg-bg-card text-text-primary text-xs font-semibold rounded-lg shadow-lg backdrop-blur-sm border border-border-light transition-all"
+                >
+                    {uploading ? (
+                        <>
+                            <div className="w-3.5 h-3.5 border-2 border-purple border-t-transparent rounded-full animate-spin" />
+                            <span>Uploading...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Upload className="w-3.5 h-3.5 text-purple-light" />
+                            <span>Change Cover</span>
+                        </>
+                    )}
+                </button>
+            </div>
+        </div>
+    );
+}
+

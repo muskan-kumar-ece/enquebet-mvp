@@ -11,7 +11,7 @@ class ApiClient {
     private timeoutMs: number;
 
     constructor(baseUrl: string) {
-        this.baseUrl = baseUrl;
+        this.baseUrl = baseUrl.replace(/\/+$/, '');
         // Avoid infinite hangs when the backend wedges (common in local/dev E2E runs).
         // Keep this reasonably low so the UI can surface an error and recover.
         this.timeoutMs = Number.isFinite(Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS))
@@ -299,9 +299,9 @@ class ApiClient {
 
 
 
-    async getPosts(params?: { view_type?: string; category?: string; location?: string; page?: number }) {
+    async getPosts(params?: { mode?: string; view_type?: string; category?: string; location?: string; page?: number }) {
         const queryParams = new URLSearchParams();
-        // Map view_type to feed filter param
+        if (params?.mode) queryParams.append('mode', params.mode);
         if (params?.view_type) queryParams.append('filter', params.view_type);
         if (params?.category) queryParams.append('category', params.category);
         if (params?.location) queryParams.append('location', params.location);
@@ -375,10 +375,44 @@ class ApiClient {
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    async search(query: string, opts?: { type?: 'all' | 'users' | 'posts' }) {
-        const params = new URLSearchParams({ q: query });
+    async search(query: string, opts?: {
+        type?: 'all' | 'users' | 'posts' | 'builders' | 'projects';
+        category?: string;
+        location?: string;
+        college?: string;
+        skills?: string;
+        role?: string;
+        page?: number;
+        page_size?: number;
+    }) {
+        const params = new URLSearchParams();
+        if (query) params.append('q', query);
         if (opts?.type) params.append('type', opts.type);
-        return this.request<{ users: any[]; posts: any[] }>(`/search/?${params}`);
+        if (opts?.category && opts.category !== 'all') params.append('category', opts.category);
+        if (opts?.location) params.append('location', opts.location);
+        if (opts?.college) params.append('college', opts.college);
+        if (opts?.skills) params.append('skills', opts.skills);
+        if (opts?.role) params.append('role', opts.role);
+        if (opts?.page && opts.page > 1) params.append('page', String(opts.page));
+        if (opts?.page_size) params.append('page_size', String(opts.page_size));
+
+        return this.request<{
+            users: any[];
+            posts: any[];
+            builders: any[];
+            projects: any[];
+            pagination: {
+                page: number;
+                page_size: number;
+                total_users: number;
+                total_posts: number;
+                total_pages?: number;
+                has_more_users?: boolean;
+                has_more_posts?: boolean;
+                has_next?: boolean;
+                has_prev?: boolean;
+            };
+        }>(`/search/?${params}`);
     }
 
     async getComments(postId: string) {
@@ -408,13 +442,19 @@ class ApiClient {
     }
 
     async acceptCollaborationRequest(requestId: string) {
-        return this.request<{ message: string; group_chat_id: string }>(`/collaboration/request/${requestId}/accept/`, {
+        return this.request<{ message: string; group_chat_id?: string; workspace_id?: string }>(`/collaboration/request/${requestId}/accept/`, {
             method: 'POST',
         });
     }
 
     async declineCollaborationRequest(requestId: string) {
         return this.request<{ message: string }>(`/collaboration/request/${requestId}/decline/`, {
+            method: 'POST',
+        });
+    }
+
+    async cancelCollaborationRequest(requestId: string) {
+        return this.request<{ message: string; cancelled: boolean }>(`/collaboration/request/${requestId}/cancel/`, {
             method: 'POST',
         });
     }
@@ -478,6 +518,199 @@ class ApiClient {
             body: JSON.stringify({ content }),
         });
     }
+
+    // Workspaces & Project Execution
+    async getMyWorkspaces() {
+        const data = await this.request<any>('/workspaces/');
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async getWorkspace(workspaceId: string) {
+        return this.request<any>(`/workspaces/${workspaceId}/`);
+    }
+
+    async updateWorkspace(workspaceId: string, data: { repo_url?: string; demo_url?: string; documentation_url?: string; max_members?: number }) {
+        return this.request<any>(`/workspaces/${workspaceId}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getWorkspaceMembers(workspaceId: string) {
+        const data = await this.request<any>(`/workspaces/${workspaceId}/members/`);
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async updateMemberRole(workspaceId: string, memberId: string, data: { role?: string; role_title?: string }) {
+        return this.request<any>(`/workspaces/${workspaceId}/members/${memberId}/role/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async leaveWorkspace(workspaceId: string) {
+        return this.request<{ message: string }>(`/workspaces/${workspaceId}/members/leave/`, {
+            method: 'POST',
+        });
+    }
+
+    async removeWorkspaceMember(workspaceId: string, memberId: string, reason?: string) {
+        return this.request<{ message: string }>(`/workspaces/${workspaceId}/members/${memberId}/remove/`, {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+        });
+    }
+
+    async getWorkspaceActivity(workspaceId: string) {
+        const data = await this.request<any>(`/workspaces/${workspaceId}/activity/`);
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async getWorkspaceMilestones(workspaceId: string) {
+        const data = await this.request<any>(`/workspaces/${workspaceId}/milestones/`);
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async createWorkspaceMilestone(workspaceId: string, data: { title: string; description?: string; due_date?: string; order?: number }) {
+        return this.request<any>(`/workspaces/${workspaceId}/milestones/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getWorkspaceTasks(workspaceId: string, filters?: { status?: string; assignee?: string; milestone?: string }) {
+        let url = `/workspaces/${workspaceId}/tasks/`;
+        if (filters) {
+            const params = new URLSearchParams();
+            if (filters.status) params.append('status', filters.status);
+            if (filters.assignee) params.append('assignee', filters.assignee);
+            if (filters.milestone) params.append('milestone', filters.milestone);
+            const qs = params.toString();
+            if (qs) url += `?${qs}`;
+        }
+        const data = await this.request<any>(url);
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async createWorkspaceTask(workspaceId: string, data: {
+        title: string;
+        description?: string;
+        priority?: string;
+        status?: string;
+        assignee_id?: string;
+        reviewer_id?: string;
+        milestone_id?: string;
+        due_date?: string;
+    }) {
+        return this.request<any>(`/workspaces/${workspaceId}/tasks/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateWorkspaceTask(workspaceId: string, taskId: string, data: any) {
+        return this.request<any>(`/workspaces/${workspaceId}/tasks/${taskId}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async submitTaskDeliverable(workspaceId: string, taskId: string, data: {
+        title?: string;
+        description?: string;
+        pr_url?: string;
+        file_url?: string;
+        file_type?: string;
+    }) {
+        return this.request<any>(`/workspaces/${workspaceId}/tasks/${taskId}/deliverables/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async reviewTaskDeliverable(workspaceId: string, taskId: string, deliverableId: string, data: {
+        verdict: 'approved' | 'changes_requested' | 'rejected';
+        feedback?: string;
+    }) {
+        return this.request<any>(`/workspaces/${workspaceId}/tasks/${taskId}/deliverables/${deliverableId}/review/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async completeWorkspace(workspaceId: string) {
+        return this.request<any>(`/workspaces/${workspaceId}/complete/`, {
+            method: 'POST',
+        });
+    }
+
+    async getWorkspaceProof(workspaceId: string) {
+        return this.request<any>(`/workspaces/${workspaceId}/complete/`);
+    }
+
+    async reopenWorkspace(workspaceId: string) {
+        return this.request<any>(`/workspaces/${workspaceId}/reopen/`, {
+            method: 'POST',
+        });
+    }
+
+    // Public Proof of Work & Peer Review
+    async getPublicProof(code: string) {
+        return this.request<any>(`/proofs/${code}/`);
+    }
+
+    async submitPeerReview(code: string, data: {
+        reviewee_id: string;
+        execution_score: number;
+        collaboration_score: number;
+        reliability_score: number;
+        feedback?: string;
+    }) {
+        return this.request<any>(`/proofs/${code}/peer-review/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    // Builder Reputation & Verified Contribution Summary
+    async getUserReputation(userId: string) {
+        return this.request<{
+            score: number;
+            level: string;
+            badge_color: string;
+            verified_stats: {
+                approved_deliverables_count: number;
+                completed_tasks_count: number;
+                completed_projects_count: number;
+                peer_reviews_count: number;
+                average_peer_rating: number;
+            };
+            score_breakdown: {
+                deliverables_points: number;
+                tasks_points: number;
+                projects_points: number;
+                peer_reviews_points: number;
+            };
+            recent_events: Array<{
+                id: string;
+                event_type: string;
+                points: number;
+                description: string;
+                created_at: string;
+            }>;
+        }>(`/users/${userId}/reputation/`);
+    }
+
+    async getMyReputation() {
+        return this.request<any>('/users/me/reputation/');
+    }
+
+    async recalculateReputation(userId: string) {
+        return this.request<any>(`/users/${userId}/reputation/recalculate/`, {
+            method: 'POST',
+        });
+    }
 }
+
 
 export const api = new ApiClient(API_BASE_URL);

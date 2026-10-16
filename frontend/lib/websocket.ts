@@ -134,7 +134,7 @@ export class WebSocketManager {
 /** Build WS URL with JWT token in query string */
 export function buildWsUrl(path: string): string {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    const base = process.env.NEXT_PUBLIC_WS_URL || 'ws://127.0.0.1:8000';
+    const base = (process.env.NEXT_PUBLIC_WS_URL || 'ws://127.0.0.1:8000').replace(/\/+$/, '');
     const url = `${base}/${path.replace(/^\//, '')}`;
     return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }

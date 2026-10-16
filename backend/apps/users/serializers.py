@@ -12,15 +12,20 @@ User = get_user_model()
 class UserSkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserSkill
-        fields = ['id', 'skill_name']
+        fields = ['id', 'skill_name', 'level']
 
 
 class SkillsField(serializers.Field):
-    """Read/write user skills as a list of strings.
-    Accepts a real list (JSON body) or a JSON-stringified list (FormData)."""
+    """Read/write user skills.
+    Accepts:
+      - List of strings: ["Python", "React"]
+      - List of objects: [{"skill_name": "Python", "level": "advanced"}]
+      - JSON string of either (for multipart FormData compatibility)
+    Returns:
+      - List of strings for 100% backward compatibility with existing clients.
+    """
 
     def to_representation(self, value):
-        # value is typically a RelatedManager for UserSkill
         if hasattr(value, 'all'):
             value = value.all()
         return [getattr(skill, 'skill_name', str(skill)) for skill in value]
@@ -28,7 +33,6 @@ class SkillsField(serializers.Field):
     def to_internal_value(self, data):
         if data is None:
             return []
-        # FormData sends arrays as JSON-encoded strings — parse them
         if isinstance(data, str):
             text = data.strip()
             if not text:
@@ -36,50 +40,158 @@ class SkillsField(serializers.Field):
             try:
                 data = json.loads(text)
             except json.JSONDecodeError:
-                # Single skill as plain text
-                return [text] if text else []
+                return [{'skill_name': text, 'level': 'intermediate'}]
+
         if not isinstance(data, list):
-            raise serializers.ValidationError('Expected a list of strings')
+            raise serializers.ValidationError('Expected a list of strings or skill objects')
 
         cleaned = []
+        valid_levels = {'beginner', 'intermediate', 'advanced'}
         for item in data:
-            if not isinstance(item, str):
-                raise serializers.ValidationError('Each skill must be a string')
-            name = item.strip()
-            if name:
-                cleaned.append(name)
+            if isinstance(item, str):
+                name = item.strip()
+                if name:
+                    cleaned.append({'skill_name': name, 'level': 'intermediate'})
+            elif isinstance(item, dict):
+                name = (item.get('skill_name') or item.get('name') or '').strip()
+                level = (item.get('level') or 'intermediate').strip().lower()
+                if level not in valid_levels:
+                    level = 'intermediate'
+                if name:
+                    cleaned.append({'skill_name': name, 'level': level})
+            else:
+                raise serializers.ValidationError('Each skill must be a string or object with skill_name and level')
+
         return cleaned
 
 
 class UserSerializer(serializers.ModelSerializer):
     skills = SkillsField(required=False)
+    skills_detailed = UserSkillSerializer(source='skills', many=True, read_only=True)
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
-    # Frontend uses avatar_url — map it to profile_image for read/write.
+    completeness_score = serializers.SerializerMethodField()
+    is_private_locked = serializers.SerializerMethodField()
+    reputation_tier = serializers.SerializerMethodField()
     avatar_url = serializers.URLField(source='profile_image', required=False, allow_blank=True)
     
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'username', 'full_name', 'bio',
+            'id', 'email', 'username', 'full_name', 'headline', 'bio',
             'profile_image', 'avatar_url', 'cover_image', 'location', 'college',
-            'is_private',
-            'skills', 'followers_count', 'following_count',
+            'is_private', 'is_private_locked',
+            'verification_level', 'reputation_score', 'reputation_tier', 'completeness_score',
+            'skills', 'skills_detailed', 'followers_count', 'following_count',
             'education', 'projects', 'experience',
             'resume_file', 'linkedin_url', 'github_url', 'portfolio_url',
             'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = [
+            'id', 'created_at', 'verification_level', 'reputation_score',
+            'reputation_tier', 'completeness_score', 'is_private_locked'
+        ]
+
+
+    def to_internal_value(self, data):
+        import json
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        for field in ['education', 'experience', 'projects']:
+            val = data.get(field)
+            if isinstance(val, str):
+                try:
+                    data[field] = json.loads(val)
+                except (ValueError, TypeError):
+                    pass
+        return super().to_internal_value(data)
+
+    def get_is_private_locked(self, instance):
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None) if request else None
+        if not instance.is_private:
+            return False
+        if request_user and request_user.is_authenticated and request_user.id == instance.id:
+            return False
+        if request_user and request_user.is_authenticated:
+            followed_ids = self.context.get('followed_user_ids')
+            if followed_ids is not None:
+                return instance.id not in followed_ids
+            return not Follower.objects.filter(follower=request_user, following=instance).exists()
+        return True
+
+    def get_reputation_tier(self, obj):
+        from apps.collaboration.reputation_config import get_builder_level
+        return get_builder_level(getattr(obj, 'reputation_score', 0))['title']
+
+    def get_completeness_score(self, obj):
+
+        score = 0
+        # Full name: 10 points
+        if obj.full_name and obj.full_name.strip():
+            score += 10
+        # Bio: 15 points
+        if obj.bio and obj.bio.strip():
+            score += 15
+        # Headline: 15 points
+        if getattr(obj, 'headline', '') and obj.headline.strip():
+            score += 15
+        # Profile image: 15 points
+        if obj.profile_image and obj.profile_image.strip():
+            score += 15
+        # At least one skill: 15 points
+        if obj.skills.exists():
+            score += 15
+        # College or location: 10 points
+        if (obj.college and obj.college.strip()) or (obj.location and obj.location.strip()):
+            score += 10
+        # At least one professional link: 10 points
+        if (
+            (obj.linkedin_url and obj.linkedin_url.strip())
+            or (obj.github_url and obj.github_url.strip())
+            or (obj.portfolio_url and obj.portfolio_url.strip())
+        ):
+            score += 10
+        # At least one education, experience, or project entry: 10 points
+        has_edu = bool(obj.education and len(obj.education) > 0)
+        has_exp = bool(obj.experience and len(obj.experience) > 0)
+        has_proj = bool(obj.projects and len(obj.projects) > 0)
+        if has_edu or has_exp or has_proj:
+            score += 10
+        return max(0, min(100, score))
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Only expose email to the user themselves
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.is_authenticated:
-            if request.user.id != instance.id:
-                data.pop('email', None)
-        else:
+        request_user = getattr(request, 'user', None) if request else None
+
+        is_owner = bool(request_user and request_user.is_authenticated and request_user.id == instance.id)
+        
+        # Only expose email to the user themselves
+        if not is_owner:
             data.pop('email', None)
+
+        # Check private profile restrictions
+        if instance.is_private and not is_owner:
+            is_follower = False
+            if request_user and request_user.is_authenticated:
+                followed_ids = self.context.get('followed_user_ids')
+                if followed_ids is not None:
+                    is_follower = instance.id in followed_ids
+                else:
+                    is_follower = Follower.objects.filter(follower=request_user, following=instance).exists()
+
+            if not is_follower:
+                # Private account locked: strip private details
+                data['is_private_locked'] = True
+                data.pop('education', None)
+                data.pop('experience', None)
+                data.pop('projects', None)
+                data.pop('resume_file', None)
+                data.pop('linkedin_url', None)
+                data.pop('github_url', None)
+                data.pop('portfolio_url', None)
+
         return data
     
     def get_followers_count(self, obj):
@@ -89,19 +201,26 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.following.count()
 
     def update(self, instance, validated_data):
+        # Prevent non-admin users from self-awarding verification or reputation
+        request = self.context.get('request')
+        is_staff = bool(request and hasattr(request, 'user') and request.user.is_staff)
+        if not is_staff:
+            validated_data.pop('verification_level', None)
+            validated_data.pop('reputation_score', None)
+
         skills = validated_data.pop('skills', None)
         instance = super().update(instance, validated_data)
 
         if skills is not None:
-            # Keep only the provided set, and add missing ones.
-            UserSkill.objects.filter(user=instance).exclude(skill_name__in=skills).delete()
-            existing = set(
-                UserSkill.objects.filter(user=instance, skill_name__in=skills)
-                .values_list('skill_name', flat=True)
-            )
-            for name in skills:
-                if name not in existing:
-                    UserSkill.objects.create(user=instance, skill_name=name)
+            # skills is a list of dicts: [{'skill_name': name, 'level': lvl}, ...]
+            requested_names = [s['skill_name'] for s in skills]
+            UserSkill.objects.filter(user=instance).exclude(skill_name__in=requested_names).delete()
+            for item in skills:
+                UserSkill.objects.update_or_create(
+                    user=instance,
+                    skill_name=item['skill_name'],
+                    defaults={'level': item.get('level', 'intermediate')}
+                )
 
         return instance
 

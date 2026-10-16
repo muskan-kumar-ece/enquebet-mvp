@@ -25,7 +25,14 @@ def database_status(request):
     return JsonResponse({'database': db_type, 'label': db_label})
 
 
+def health_check(request):
+    """Public health check endpoint for Render service monitoring."""
+    return JsonResponse({'status': 'ok'})
+
+
 urlpatterns = [
+    path('healthz', health_check),
+    path('api/health/', health_check),
     path('admin/', admin.site.urls),
     path('api/v1/status/', database_status),
     path('api/status/', database_status),
@@ -33,6 +40,8 @@ urlpatterns = [
     path('api/v1/users/', include('apps.users.public_urls')),
     path('api/v1/posts/', include('apps.posts.urls')),
     path('api/v1/collaboration/', include('apps.collaboration.urls')),
+    path('api/v1/workspaces/', include('apps.collaboration.workspace_urls')),
+    path('api/v1/proofs/', include('apps.collaboration.proof_urls')),
     path('api/v1/chats/', include('apps.chats.urls')),
     path('api/v1/notifications/', include('apps.notifications.urls')),
     path('api/v1/search/', include('apps.search.urls')),
@@ -45,6 +54,8 @@ urlpatterns = [
     path('api/users/', include('apps.users.public_urls')),
     path('api/posts/', include('apps.posts.urls')),
     path('api/collaboration/', include('apps.collaboration.urls')),
+    path('api/workspaces/', include('apps.collaboration.workspace_urls')),
+    path('api/proofs/', include('apps.collaboration.proof_urls')),
     path('api/messages/', include('apps.chats.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/search/', include('apps.search.urls')),

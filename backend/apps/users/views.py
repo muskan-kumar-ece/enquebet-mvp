@@ -7,6 +7,8 @@ from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.serializers import Serializer, CharField
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -396,4 +398,45 @@ class LogoutAllView(APIView):
         for token in OutstandingToken.objects.filter(user=request.user):
             BlacklistedToken.objects.get_or_create(token=token)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MeReputationView(APIView):
+    """Retrieve current authenticated builder's explainable reputation summary."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.collaboration.reputation_service import ReputationService
+        summary = ReputationService.get_user_reputation_summary(request.user, viewer=request.user)
+        return Response(summary)
+
+
+class UserReputationView(APIView):
+    """Retrieve any builder's explainable reputation summary (public with privacy redactions)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id):
+        from apps.collaboration.reputation_service import ReputationService
+        viewer = request.user if request.user.is_authenticated else None
+        target_user = get_object_or_404(User, id=user_id)
+        summary = ReputationService.get_user_reputation_summary(target_user, viewer=viewer)
+        return Response(summary)
+
+
+class UserReputationRecalculateView(APIView):
+    """Trigger verified recalculation of reputation from ground-truth contributions."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id):
+        from apps.collaboration.reputation_service import ReputationService
+        if request.user.id != user_id and not request.user.is_staff:
+            raise PermissionDenied('You can only trigger recalculation for your own builder profile.')
+        target_user = get_object_or_404(User, id=user_id)
+        score = ReputationService.recalculate_all_for_user(target_user)
+        summary = ReputationService.get_user_reputation_summary(target_user, viewer=request.user)
+        return Response({
+            'message': 'Reputation recalculated successfully',
+            'score': score,
+            'summary': summary
+        })
+
 

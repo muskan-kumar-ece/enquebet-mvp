@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Users, Check, X, Clock, ChevronRight } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
@@ -41,9 +42,11 @@ export default function CollaborationPage() {
         setProcessing(req.id);
         try {
             const result = await api.acceptCollaborationRequest(req.id);
-            toast.success('Accepted! Group chat ready 🎉');
+            toast.success('Accepted! Workspace & Group Chat ready 🎉');
             setRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'accepted' } : r));
-            if (result.group_chat_id) {
+            if (result.workspace_id) {
+                router.push(`/workspace/${result.workspace_id}`);
+            } else if (result.group_chat_id) {
                 router.push(`/messages?convo=${result.group_chat_id}`);
             }
         } catch (err: any) {
@@ -199,14 +202,22 @@ export default function CollaborationPage() {
                                                 </div>
                                             )}
 
-                                            {/* Accepted: show link to messages */}
+                                            {/* Accepted: show link to workspace & chat */}
                                             {req.status === 'accepted' && (
-                                                <button
-                                                    onClick={() => router.push('/messages')}
-                                                    className="text-sm text-purple hover:text-purple-light flex items-center gap-1"
-                                                >
-                                                    Open group chat →
-                                                </button>
+                                                <div className="flex items-center gap-4">
+                                                    <Link
+                                                        href={`/workspace/${req.post?.id}`}
+                                                        className="text-sm font-medium text-purple hover:text-purple-light flex items-center gap-1"
+                                                    >
+                                                        <span>Open workspace →</span>
+                                                    </Link>
+                                                    <button
+                                                        onClick={() => router.push('/messages')}
+                                                        className="text-sm text-text-muted hover:text-text-primary flex items-center gap-1"
+                                                    >
+                                                        Open group chat
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>

@@ -12,9 +12,14 @@ from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, SAFE_METHODS, BasePermission
-from rest_framework.exceptions import ValidationError
-from django.db.models import Count, Q, Case, When, Value, IntegerField, BooleanField, Exists, OuterRef, Subquery
-from .models import Post, Like, Comment, SavedPost, PostCollaborator, PostReport, PostAttachment
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound, NotAuthenticated
+from django.db.models import (
+    Count, Q, Case, When, Value, IntegerField, BooleanField, Exists, OuterRef, Subquery, F, ExpressionWrapper
+)
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+from datetime import timedelta
+from .models import Post, Like, Comment, SavedPost, PostCollaborator, PostReport, PostAttachment, PostTag, PostRequirement
 from .serializers import PostSerializer, CreatePostSerializer, CommentSerializer
 
 
@@ -54,7 +59,32 @@ class UserPostsView(generics.ListAPIView):
 
     def get_queryset(self):
         user_id = self.kwargs['user_id']
-        qs = Post.objects.filter(user_id=user_id).select_related('user').prefetch_related(
+        from apps.users.models import User, Follower
+
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise NotFound('User not found')
+
+        if target_user.is_private:
+            request_user = self.request.user
+            is_owner = bool(request_user and request_user.is_authenticated and request_user.id == target_user.id)
+            is_follower = bool(
+                request_user and request_user.is_authenticated and
+                Follower.objects.filter(follower=request_user, following=target_user).exists()
+            )
+            if not (is_owner or is_follower):
+                raise PermissionDenied('This account is private. Follow this user to see their posts.')
+
+        qs = Post.objects.filter(user_id=user_id)
+        # Exclude moderated reported posts (>= 3 reports) from public/non-owner view
+        if not (self.request.user and self.request.user.is_authenticated and self.request.user.id == target_user.id):
+            reported_post_ids = PostReport.objects.values('post_id').annotate(
+                report_count=Count('id')
+            ).filter(report_count__gte=3).values_list('post_id', flat=True)
+            qs = qs.exclude(id__in=Subquery(reported_post_ids))
+
+        qs = qs.select_related('user').prefetch_related(
             'attachments', 'requirements', 'tags'
         ).annotate(
             _likes_count=Count('likes', distinct=True),
@@ -89,6 +119,22 @@ class PostSearchView(generics.ListAPIView):
         if location:
             queryset = queryset.filter(location__icontains=location)
 
+        # Moderation: exclude posts with 3 or more reports
+        reported_post_ids = PostReport.objects.values('post_id').annotate(
+            report_count=Count('id')
+        ).filter(report_count__gte=3).values_list('post_id', flat=True)
+        queryset = queryset.exclude(id__in=Subquery(reported_post_ids))
+
+        # Privacy: private user posts are only visible to owner and approved followers
+        user = self.request.user
+        if user and user.is_authenticated:
+            from apps.users.models import Follower
+            followed_ids = Follower.objects.filter(follower=user).values_list('following_id', flat=True)
+            privacy_q = Q(user__is_private=False) | Q(user=user) | Q(user_id__in=followed_ids)
+        else:
+            privacy_q = Q(user__is_private=False)
+        queryset = queryset.filter(privacy_q)
+
         qs = queryset.annotate(
             _likes_count=Count('likes', distinct=True),
             _comments_count=Count('comments', distinct=True)
@@ -99,63 +145,274 @@ class PostSearchView(generics.ListAPIView):
 
 class FeedView(generics.ListAPIView):
     """
-    Get feed with filters: public, college, openidea
-    Supports location-based filtering
+    Feed View supporting:
+      - for_you: Personalized builder discovery algorithm (skills, location, college, engagement, recency, author diversity)
+      - following: Chronological posts from followed builders (excluding self)
+      - public: Public posts
+      - college: Same-college posts for authenticated college members
+      - openidea: Open collaboration idea posts
+    Enforces moderation (reports >= 3 excluded) and privacy (private account posts hidden from non-followers).
     """
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-    
-    def get_queryset(self):
-        filter_type = self.request.query_params.get('filter', 'public')
-        location = self.request.query_params.get('location')
 
-        queryset = Post.objects.select_related('user').prefetch_related(
-            'attachments', 'requirements', 'tags', 'likes', 'comments'
-        )
+    def _apply_moderation_and_privacy(self, queryset, user):
+        """Apply strict moderation and private profile restrictions across all feed queries."""
+        # Moderation: exclude posts with 3 or more reports
+        reported_post_ids = PostReport.objects.values('post_id').annotate(
+            report_count=Count('id')
+        ).filter(report_count__gte=3).values_list('post_id', flat=True)
+        queryset = queryset.exclude(id__in=Subquery(reported_post_ids))
 
-        # Filter by view type
-        if filter_type == 'public':
-            queryset = queryset.filter(view_type='public')
-        elif filter_type == 'college':
-            if self.request.user.is_authenticated:
-                queryset = queryset.filter(
-                    view_type='college',
-                    college=self.request.user.college
-                )
-            else:
-                # Unauthenticated users cannot see college-only posts
-                return Post.objects.none()
-        elif filter_type == 'openidea':
-            queryset = queryset.filter(view_type='openidea')
+        # Privacy: private user posts are only visible to owner and approved followers
+        if user and user.is_authenticated:
+            from apps.users.models import Follower
+            followed_ids = Follower.objects.filter(follower=user).values_list('following_id', flat=True)
+            privacy_q = Q(user__is_private=False) | Q(user=user) | Q(user_id__in=followed_ids)
+        else:
+            privacy_q = Q(user__is_private=False)
 
-        # Only filter by location if explicitly requested
+        return queryset.filter(privacy_q)
+
+    def _build_following_queryset(self, queryset, user, category, location):
+        """Following feed: newest posts from followed builders."""
+        if not (user and user.is_authenticated):
+            raise NotAuthenticated('Please log in to view posts from builders you follow.')
+
+        from apps.users.models import Follower
+        followed_ids = Follower.objects.filter(follower=user).values_list('following_id', flat=True)
+
+        qs = queryset.filter(user_id__in=followed_ids).exclude(user=user)
+        if category:
+            qs = qs.filter(category__iexact=category)
         if location:
-            queryset = queryset.filter(location=location)
+            qs = qs.filter(location__icontains=location)
 
-        # Location-based suggestions (ordering only): if user has a location,
-        # prioritize posts from the same location first.
-        user_location = ''
-        if self.request.user.is_authenticated:
-            user_location = (getattr(self.request.user, 'location', '') or '').strip()
-        if user_location and not location:
-            queryset = queryset.annotate(
-                location_match=Case(
-                    When(location__iexact=user_location, then=Value(1)),
-                    default=Value(0),
-                    output_field=IntegerField(),
-                )
-            )
-
-        # Annotate with counts for performance
-        queryset = queryset.annotate(
+        qs = qs.annotate(
             _likes_count=Count('likes', distinct=True),
             _comments_count=Count('comments', distinct=True)
         )
-        queryset = _annotate_user_interactions(queryset, self.request.user)
+        qs = _annotate_user_interactions(qs, user)
+        return qs.order_by('-created_at', '-id')
 
-        if user_location and not location:
-            return queryset.order_by('-location_match', '-created_at')
-        return queryset.order_by('-created_at')
+    def _build_for_you_queryset(self, queryset, user, category, location):
+        """Personalized Discovery Algorithm (For You feed)."""
+        from apps.users.models import UserSkill
+
+        # For You includes public posts, open ideas, and college posts if user matches college
+        view_type_q = Q(view_type='public') | Q(view_type='openidea')
+        if user and user.is_authenticated and getattr(user, 'college', ''):
+            view_type_q |= Q(view_type='college', college=user.college.strip())
+        qs = queryset.filter(view_type_q)
+
+        if category:
+            qs = qs.filter(category__iexact=category)
+        if location:
+            qs = qs.filter(location__icontains=location)
+
+        # 1. Base counts
+        qs = qs.annotate(
+            _likes_count=Count('likes', distinct=True),
+            _comments_count=Count('comments', distinct=True)
+        )
+
+        # 2. Skill match with proficiency weighting (up to 40 pts)
+        adv_skills = []
+        int_skills = []
+        beg_skills = []
+        if user and user.is_authenticated:
+            skills = UserSkill.objects.filter(user=user)
+            for s in skills:
+                name = s.skill_name.strip()
+                if not name:
+                    continue
+                lvl = (s.level or 'intermediate').lower()
+                if lvl == 'advanced':
+                    adv_skills.append(name)
+                elif lvl == 'beginner':
+                    beg_skills.append(name)
+                else:
+                    int_skills.append(name)
+
+        def _build_skill_q(skill_names):
+            if not skill_names:
+                return Q(pk__in=[])
+            q_obj = Q()
+            for n in skill_names:
+                q_obj |= Q(category__iexact=n)
+                q_obj |= Exists(PostTag.objects.filter(post=OuterRef('pk'), tag_name__iexact=n))
+                q_obj |= Exists(PostRequirement.objects.filter(post=OuterRef('pk'), role_name__icontains=n))
+            return q_obj
+
+        adv_q = _build_skill_q(adv_skills)
+        int_q = _build_skill_q(int_skills)
+        beg_q = _build_skill_q(beg_skills)
+
+        skill_score = Case(
+            When(adv_q, then=Value(40)),
+            When(int_q, then=Value(35)),
+            When(beg_q, then=Value(25)),
+            default=Value(0),
+            output_field=IntegerField()
+        )
+
+        # 3. Location match (up to 25 pts)
+        if user and user.is_authenticated and getattr(user, 'location', ''):
+            user_loc = user.location.strip()
+            location_score = Case(
+                When(location__iexact=user_loc, then=Value(25)),
+                When(location__icontains='remote', then=Value(10)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        else:
+            location_score = Value(0, output_field=IntegerField())
+
+        # 4. College match (up to 20 pts)
+        if user and user.is_authenticated and getattr(user, 'college', ''):
+            user_col = user.college.strip()
+            college_score = Case(
+                When(college__iexact=user_col, then=Value(20)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        else:
+            college_score = Value(0, output_field=IntegerField())
+
+        # 5. Engagement score (up to 15 pts, raw = likes * 1 + comments * 2)
+        raw_eng = ExpressionWrapper(
+            F('_likes_count') + F('_comments_count') * 2,
+            output_field=IntegerField()
+        )
+        engagement_score = Case(
+            When(_raw_engagement__gt=15, then=Value(15)),
+            default=F('_raw_engagement'),
+            output_field=IntegerField()
+        )
+
+        # 6. Recency decay (0 to -50 pts, ~2 pts/day)
+        now = timezone.now()
+        t1 = now - timedelta(days=1)
+        t2 = now - timedelta(days=2)
+        t3 = now - timedelta(days=3)
+        t5 = now - timedelta(days=5)
+        t7 = now - timedelta(days=7)
+        t14 = now - timedelta(days=14)
+        t30 = now - timedelta(days=30)
+
+        recency_score = Case(
+            When(created_at__gte=t1, then=Value(0)),
+            When(created_at__gte=t2, then=Value(-2)),
+            When(created_at__gte=t3, then=Value(-4)),
+            When(created_at__gte=t5, then=Value(-8)),
+            When(created_at__gte=t7, then=Value(-12)),
+            When(created_at__gte=t14, then=Value(-20)),
+            When(created_at__gte=t30, then=Value(-35)),
+            default=Value(-50),
+            output_field=IntegerField()
+        )
+
+        # 7. Author diversity penalty (-10 for 2nd post in 7 days, -20 for 3rd+)
+        newer_author_posts_subquery = Coalesce(
+            Subquery(
+                Post.objects.filter(
+                    user=OuterRef('user'),
+                    created_at__gt=OuterRef('created_at'),
+                    created_at__gte=t7
+                ).values('user').annotate(cnt=Count('id')).values('cnt')[:1]
+            ),
+            Value(0),
+            output_field=IntegerField()
+        )
+
+        author_penalty = Case(
+            When(_newer_author_posts__gte=2, then=Value(20)),
+            When(_newer_author_posts=1, then=Value(10)),
+            default=Value(0),
+            output_field=IntegerField()
+        )
+
+        qs = qs.annotate(
+            _raw_engagement=raw_eng,
+            _newer_author_posts=newer_author_posts_subquery
+        ).annotate(
+            _skill_score=skill_score,
+            _location_score=location_score,
+            _college_score=college_score,
+            _engagement_score=engagement_score,
+            _recency_score=recency_score,
+            _author_penalty=author_penalty
+        ).annotate(
+            _ranking_score=ExpressionWrapper(
+                F('_skill_score') + F('_location_score') + F('_college_score') +
+                F('_engagement_score') + F('_recency_score') - F('_author_penalty'),
+                output_field=IntegerField()
+            )
+        )
+
+        qs = _annotate_user_interactions(qs, user)
+        return qs.order_by('-_ranking_score', '-created_at', '-id')
+
+    def get_queryset(self):
+        user = self.request.user
+        mode_param = (self.request.query_params.get('mode') or '').strip().lower()
+        filter_param = (self.request.query_params.get('filter') or '').strip().lower()
+        category = (self.request.query_params.get('category') or '').strip()
+        location = (self.request.query_params.get('location') or '').strip()
+
+        # Resolve effective feed mode
+        feed_mode = mode_param or filter_param or 'for_you'
+
+        base_qs = Post.objects.select_related('user').prefetch_related(
+            'attachments', 'requirements', 'tags', 'likes', 'comments'
+        )
+        base_qs = self._apply_moderation_and_privacy(base_qs, user)
+
+        if feed_mode == 'following':
+            return self._build_following_queryset(base_qs, user, category, location)
+
+        if feed_mode == 'college':
+            if user and user.is_authenticated and getattr(user, 'college', ''):
+                qs = base_qs.filter(view_type='college', college=user.college.strip())
+            else:
+                return Post.objects.none()
+            if category:
+                qs = qs.filter(category__iexact=category)
+            if location:
+                qs = qs.filter(location__icontains=location)
+            qs = qs.annotate(
+                _likes_count=Count('likes', distinct=True),
+                _comments_count=Count('comments', distinct=True)
+            )
+            return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
+
+        if feed_mode == 'openidea':
+            qs = base_qs.filter(view_type='openidea')
+            if category:
+                qs = qs.filter(category__iexact=category)
+            if location:
+                qs = qs.filter(location__icontains=location)
+            qs = qs.annotate(
+                _likes_count=Count('likes', distinct=True),
+                _comments_count=Count('comments', distinct=True)
+            )
+            return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
+
+        if feed_mode == 'public':
+            qs = base_qs.filter(view_type='public')
+            if category:
+                qs = qs.filter(category__iexact=category)
+            if location:
+                qs = qs.filter(location__icontains=location)
+            qs = qs.annotate(
+                _likes_count=Count('likes', distinct=True),
+                _comments_count=Count('comments', distinct=True)
+            )
+            return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
+
+        # Default: for_you
+        return self._build_for_you_queryset(base_qs, user, category, location)
+
 
 
 
@@ -314,17 +571,25 @@ class PostJoinView(APIView):
         if PostCollaborator.objects.filter(post=post, user=request.user).exists():
             return Response({'joined': True, 'requested': False})
 
-        # Check if already requested (pending/accepted)
-        if CollaborationRequest.objects.filter(post=post, sender=request.user).exclude(status='declined').exists():
+        # Check if already requested (allow re-request only if previously declined or cancelled)
+        existing_request = CollaborationRequest.objects.filter(post=post, sender=request.user).first()
+        if existing_request and existing_request.status in ('pending', 'accepted'):
             return Response({'error': 'Request already sent'}, status=status.HTTP_400_BAD_REQUEST)
 
         message = (request.data.get('message') or '').strip()
-        collab_request = CollaborationRequest.objects.create(
-            post=post,
-            sender=request.user,
-            receiver=post.user,
-            message=message,
-        )
+        if existing_request and existing_request.status in ('declined', 'cancelled'):
+            collab_request = existing_request
+            collab_request.receiver = post.user
+            collab_request.message = message
+            collab_request.status = 'pending'
+            collab_request.save(update_fields=['receiver', 'message', 'status', 'updated_at'])
+        else:
+            collab_request = CollaborationRequest.objects.create(
+                post=post,
+                sender=request.user,
+                receiver=post.user,
+                message=message,
+            )
 
         Notification.objects.create(
             user=post.user,

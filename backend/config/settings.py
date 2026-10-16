@@ -4,6 +4,7 @@ Django settings for ENQUEbet backend.
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 import dj_database_url
 from datetime import timedelta
@@ -13,8 +14,29 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
+
+# Render deployment detection
+IS_RENDER = os.getenv('RENDER', '').strip().lower() in ('true', '1')
+
+# In production / Render, DEBUG must default to False unless explicitly overridden.
+# In local dev, default to True for developer ergonomics.
+_default_debug = 'False' if IS_RENDER else 'True'
+DEBUG = os.getenv('DEBUG', _default_debug).strip().lower() in ('true', '1', 'yes')
+
+if not DEBUG and SECRET_KEY == 'django-insecure-change-this-in-production':
+    import sys
+    # Don't fail build/test commands, but fail server boot
+    if not any(arg in sys.argv for arg in ['test', 'collectstatic', 'check', 'makemigrations', 'migrate']):
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("SECRET_KEY environment variable must be set to a secure value in production (DEBUG=False).")
+
+_default_hosts = 'localhost,127.0.0.1,enquebet-mvp-534x.onrender.com'
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', _default_hosts).split(',') if h.strip()]
+_render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
+if 'enquebet-mvp-534x.onrender.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('enquebet-mvp-534x.onrender.com')
 
 # Application definition
 INSTALLED_APPS = [
@@ -80,15 +102,38 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-# Channel Layers — use Redis in production, in-memory for dev
-_redis_url = os.getenv('UPSTASH_REDIS_URL') or os.getenv('REDIS_URL', '')
-if _redis_url and not DEBUG:
+# Channel Layers — use Redis in production/staging and when configured; in-memory for tests/dev fallback
+_redis_url = os.getenv('REDIS_URL') or os.getenv('UPSTASH_REDIS_URL', '')
+_is_test = 'test' in sys.argv
+
+if _is_test:
+    # Test runner always uses isolated InMemoryChannelLayer
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
+    }
+elif _redis_url:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
                 'hosts': [_redis_url],
+                'capacity': int(os.getenv('CHANNEL_LAYER_CAPACITY', '1500')),
+                'expiry': int(os.getenv('CHANNEL_LAYER_EXPIRY', '60')),
             },
+        }
+    }
+elif not DEBUG:
+    # In production without Redis, prevent silent real-time failure on multi-worker backends
+    if not any(arg in sys.argv for arg in ['test', 'collectstatic', 'check', 'makemigrations', 'migrate']):
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "REDIS_URL or UPSTASH_REDIS_URL is required in production (DEBUG=False) for Django Channels."
+        )
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
         }
     }
 else:
@@ -115,8 +160,9 @@ if force_sqlite:
     DATABASES = _use_sqlite_database()
 elif database_url:
     DATABASES = {
-        'default': dj_database_url.parse(database_url, conn_max_age=600)
+        'default': dj_database_url.parse(database_url, conn_max_age=0, conn_health_checks=True)
     }
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 else:
     DATABASES = _use_sqlite_database()
 
@@ -221,19 +267,79 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
-CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS if o.strip()]
+_default_cors = 'https://enquebet.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
+_cors_raw = os.getenv('CORS_ALLOWED_ORIGINS', _default_cors)
+CORS_ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in _cors_raw.split(',') if o.strip()]
+if 'https://enquebet.vercel.app' not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append('https://enquebet.vercel.app')
 CORS_ALLOW_CREDENTIALS = True
 
-# CSRF — required since Django 4.0 for cross-origin POST requests
-CSRF_TRUSTED_ORIGINS = os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in CSRF_TRUSTED_ORIGINS if o.strip()]
+# Permit Vercel preview deployments (*.vercel.app)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+]
 
-# Redis (Upstash)
-REDIS_URL = os.getenv('UPSTASH_REDIS_URL', 'redis://localhost:6379')
+# CSRF — required since Django 4.0 for cross-origin POST requests
+_default_csrf = 'https://enquebet.vercel.app,https://*.vercel.app,https://enquebet-mvp-534x.onrender.com,http://localhost:3000,http://127.0.0.1:3000'
+_csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS', _default_csrf)
+CSRF_TRUSTED_ORIGINS = [o.strip().rstrip('/') for o in _csrf_raw.split(',') if o.strip()]
+if 'https://enquebet.vercel.app' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('https://enquebet.vercel.app')
+if 'https://enquebet-mvp-534x.onrender.com' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('https://enquebet-mvp-534x.onrender.com')
+
+# Redis connection string (primary: REDIS_URL, fallback: UPSTASH_REDIS_URL)
+REDIS_URL = _redis_url or 'redis://localhost:6379'
+
+# Production Security Hardening
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').strip().lower() in ('true', '1', 'yes')
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True').strip().lower() in ('true', '1', 'yes')
+    CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').strip().lower() in ('true', '1', 'yes')
+
+    # HSTS configuration: Default to 0 for initial staging/preview unless explicitly configured.
+    # Irreversible HSTS preload should only be activated when a custom production domain is fully verified.
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').strip().lower() in ('true', '1', 'yes')
+    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False').strip().lower() in ('true', '1', 'yes')
+    X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'DENY')
+
+# Logging Configuration — structured stream output for Render & stdout
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose' if not DEBUG else 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+

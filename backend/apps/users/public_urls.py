@@ -23,6 +23,10 @@ urlpatterns = [
 
     path('<uuid:pk>/', views.UserByIdView.as_view(), name='user_by_id'),
     path('<uuid:user_id>/posts/', UserPostsView.as_view(), name='user_posts'),
+    path('me/reputation/', views.MeReputationView.as_view(), name='me_reputation'),
+    path('<uuid:user_id>/reputation/', views.UserReputationView.as_view(), name='user_reputation'),
+    path('<uuid:user_id>/reputation/recalculate/', views.UserReputationRecalculateView.as_view(), name='user_reputation_recalculate'),
     # Keep this last to avoid conflicting with the more specific routes above
     path('<str:username>/', views.UserDetailView.as_view(), name='user_by_username'),
+
 ]

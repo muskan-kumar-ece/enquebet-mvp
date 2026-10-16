@@ -1,0 +1,301 @@
+from datetime import timedelta
+from django.utils import timezone
+from rest_framework.test import APITestCase
+from rest_framework import status
+from apps.users.models import User, UserSkill, Follower
+from apps.posts.models import Post, PostTag, PostRequirement, Like, Comment, PostReport
+
+
+class FeedPhase2Tests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='alice@example.com',
+            username='alice',
+            password='Password123!',
+            full_name='Alice Builder'
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_following_feed_membership_and_ordering(self):
+        """Following feed contains posts only from followed builders, ordered newest first, excluding viewer's own posts."""
+        bob = User.objects.create_user(email='bob@example.com', username='bob', password='Pass123!')
+        charlie = User.objects.create_user(email='charlie@example.com', username='charlie', password='Pass123!')
+        dave = User.objects.create_user(email='dave@example.com', username='dave', password='Pass123!')
+
+        # Alice follows Bob and Charlie, but not Dave
+        Follower.objects.create(follower=self.user, following=bob)
+        Follower.objects.create(follower=self.user, following=charlie)
+
+        t0 = timezone.now() - timedelta(hours=3)
+        t1 = timezone.now() - timedelta(hours=2)
+        t2 = timezone.now() - timedelta(hours=1)
+        t3 = timezone.now()
+
+        p1 = Post.objects.create(user=bob, title='Bob Post 1', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p1.id).update(created_at=t0)
+
+        p2 = Post.objects.create(user=charlie, title='Charlie Post 1', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p2.id).update(created_at=t1)
+
+        p3 = Post.objects.create(user=dave, title='Dave Post 1 (Not Followed)', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p3.id).update(created_at=t2)
+
+        p_self = Post.objects.create(user=self.user, title='Alice Own Post', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p_self.id).update(created_at=t3)
+
+        response = self.client.get('/api/v1/posts/feed/?mode=following')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+
+        # Only Charlie and Bob's posts, with Charlie's newer post first
+        self.assertEqual(result_titles, ['Charlie Post 1', 'Bob Post 1'])
+        self.assertNotIn('Dave Post 1 (Not Followed)', result_titles)
+        self.assertNotIn('Alice Own Post', result_titles)
+
+    def test_following_feed_empty_when_no_follows(self):
+        """Following feed handles empty state cleanly when user follows nobody."""
+        response = self.client.get('/api/v1/posts/feed/?mode=following')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        self.assertEqual(results, [])
+
+    def test_following_feed_unauthenticated_request(self):
+        """Unauthenticated request to following feed raises 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get('/api/v1/posts/feed/?mode=following')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_for_you_skill_match_ranking_and_proficiency(self):
+        """For You feed weights skills by proficiency: Advanced (40) > Intermediate (35) > Beginner (25) > None (0)."""
+        UserSkill.objects.create(user=self.user, skill_name='Python', level='advanced')
+        UserSkill.objects.create(user=self.user, skill_name='React', level='intermediate')
+        UserSkill.objects.create(user=self.user, skill_name='Docker', level='beginner')
+
+        author = User.objects.create_user(email='author@example.com', username='author', password='Pass123!')
+        now = timezone.now()
+
+        # Create posts at identical timestamps
+        p_adv = Post.objects.create(user=author, title='Advanced Skill Match', description='Desc', category='Python', view_type='public')
+        p_int = Post.objects.create(user=author, title='Intermediate Skill Match', description='Desc', category='Other', view_type='public')
+        PostTag.objects.create(post=p_int, tag_name='React')
+
+        p_beg = Post.objects.create(user=author, title='Beginner Skill Match', description='Desc', category='Other', view_type='public')
+        PostRequirement.objects.create(post=p_beg, role_name='Docker Specialist')
+
+        p_none = Post.objects.create(user=author, title='No Match', description='Desc', category='Culinary', view_type='public')
+
+        for p in [p_adv, p_int, p_beg, p_none]:
+            Post.objects.filter(id=p.id).update(created_at=now)
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+        self.assertEqual(result_titles, [
+            'Advanced Skill Match',
+            'Intermediate Skill Match',
+            'Beginner Skill Match',
+            'No Match'
+        ])
+
+    def test_for_you_location_and_college_ranking(self):
+        """Location match (+25) and College match (+20) are calculated accurately."""
+        self.user.location = 'Seattle'
+        self.user.college = 'UW'
+        self.user.save()
+
+        author = User.objects.create_user(email='author2@example.com', username='author2', password='Pass123!')
+        now = timezone.now()
+
+        p_both = Post.objects.create(user=author, title='Both Match', description='Desc', category='General', view_type='public', location='Seattle', college='UW')
+        p_loc = Post.objects.create(user=author, title='Location Match Only', description='Desc', category='General', view_type='public', location='Seattle', college='MIT')
+        p_col = Post.objects.create(user=author, title='College Match Only', description='Desc', category='General', view_type='public', location='Austin', college='UW')
+        p_neither = Post.objects.create(user=author, title='Neither Match', description='Desc', category='General', view_type='public', location='London', college='Oxford')
+
+        for p in [p_both, p_loc, p_col, p_neither]:
+            Post.objects.filter(id=p.id).update(created_at=now)
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+        self.assertEqual(result_titles, [
+            'Both Match',
+            'Location Match Only',
+            'College Match Only',
+            'Neither Match'
+        ])
+
+    def test_engagement_score_and_cap(self):
+        """Engagement score counts likes (+1) and comments (+2), properly capped at 15 points."""
+        author = User.objects.create_user(email='author3@example.com', username='author3', password='Pass123!')
+        viewer1 = User.objects.create_user(email='v1@example.com', username='v1', password='Pass123!')
+        viewer2 = User.objects.create_user(email='v2@example.com', username='v2', password='Pass123!')
+        now = timezone.now()
+
+        p_mod = Post.objects.create(user=author, title='Moderate Engagement', description='Desc', category='General', view_type='public')
+        Like.objects.create(post=p_mod, user=viewer1)
+        Comment.objects.create(post=p_mod, user=viewer2, content='Nice idea')  # 1 + 2 = 3
+
+        p_high = Post.objects.create(user=author, title='High Engagement (Capped at 15)', description='Desc', category='General', view_type='public')
+        for i in range(10):
+            u = User.objects.create_user(email=f'user{i}@example.com', username=f'user{i}', password='Pass123!')
+            Like.objects.create(post=p_high, user=u)
+            Comment.objects.create(post=p_high, user=u, content=f'Comment {i}')  # 10 + 20 = 30 -> capped at 15
+
+        p_zero = Post.objects.create(user=author, title='Zero Engagement', description='Desc', category='General', view_type='public')
+
+        for p in [p_high, p_mod, p_zero]:
+            Post.objects.filter(id=p.id).update(created_at=now)
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+        self.assertEqual(result_titles, [
+            'High Engagement (Capped at 15)',
+            'Moderate Engagement',
+            'Zero Engagement'
+        ])
+
+    def test_recency_penalty_decay(self):
+        """Older posts decay over time so fresh posts outrank them."""
+        author = User.objects.create_user(email='author4@example.com', username='author4', password='Pass123!')
+
+        p_fresh = Post.objects.create(user=author, title='Fresh Post', description='Desc', category='General', view_type='public')
+        Post.objects.filter(id=p_fresh.id).update(created_at=timezone.now() - timedelta(hours=2))
+
+        p_old = Post.objects.create(user=author, title='Old Post (10 days)', description='Desc', category='General', view_type='public')
+        Post.objects.filter(id=p_old.id).update(created_at=timezone.now() - timedelta(days=10))
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+        self.assertEqual(result_titles, ['Fresh Post', 'Old Post (10 days)'])
+
+    def test_author_diversity_penalty(self):
+        """Author diversity penalty applies to repeat posts from the same author to prevent domination."""
+        author_prolific = User.objects.create_user(email='prolific@example.com', username='prolific', password='Pass123!')
+        author_single = User.objects.create_user(email='single@example.com', username='single', password='Pass123!')
+
+        now = timezone.now()
+        # Prolific author posts 3 posts within 1 day
+        p1 = Post.objects.create(user=author_prolific, title='Prolific Post 1 (Newest)', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p1.id).update(created_at=now - timedelta(hours=1))
+
+        p_single = Post.objects.create(user=author_single, title='Single Author Post', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p_single.id).update(created_at=now - timedelta(hours=2))
+
+        p2 = Post.objects.create(user=author_prolific, title='Prolific Post 2 (Middle)', description='Desc', category='Tech', view_type='public')
+        Post.objects.filter(id=p2.id).update(created_at=now - timedelta(hours=3))
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        result_titles = [p['title'] for p in results]
+
+        # Single author post should rank above prolific author's 2nd post due to diversity penalty
+        self.assertEqual(result_titles, [
+            'Prolific Post 1 (Newest)',
+            'Single Author Post',
+            'Prolific Post 2 (Middle)'
+        ])
+
+    def test_pagination_stability_and_determinism(self):
+        """Pagination returns 20 items on page 1 and the remainder on page 2 with no duplicates."""
+        author = User.objects.create_user(email='author_p@example.com', username='author_p', password='Pass123!')
+        now = timezone.now()
+
+        for i in range(25):
+            p = Post.objects.create(
+                user=author,
+                title=f'Post Item {i:02d}',
+                description='Desc',
+                category='Tech',
+                view_type='public'
+            )
+            Post.objects.filter(id=p.id).update(created_at=now - timedelta(minutes=25 - i))
+
+        # Page 1
+        resp1 = self.client.get('/api/v1/posts/feed/?mode=for_you&page=1')
+        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
+        results1 = resp1.data.get('results')
+        self.assertEqual(len(results1), 20)
+        self.assertIsNotNone(resp1.data.get('next'))
+
+        # Page 2
+        resp2 = self.client.get('/api/v1/posts/feed/?mode=for_you&page=2')
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        results2 = resp2.data.get('results')
+        self.assertEqual(len(results2), 5)
+        self.assertIsNone(resp2.data.get('next'))
+
+        # Check disjoint sets (no duplicate items across pages)
+        ids1 = {p['id'] for p in results1}
+        ids2 = {p['id'] for p in results2}
+        self.assertTrue(ids1.isdisjoint(ids2))
+
+    def test_unauthenticated_for_you_feed(self):
+        """Unauthenticated requests to for_you feed succeed with public posts ordered by engagement and recency."""
+        self.client.force_authenticate(user=None)
+        author = User.objects.create_user(email='author_pub@example.com', username='author_pub', password='Pass123!')
+        Post.objects.create(user=author, title='Public Idea', description='Desc', category='Tech', view_type='public')
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['title'], 'Public Idea')
+
+    def test_private_post_visibility_rules(self):
+        """Posts from private accounts are hidden unless viewer is the author or an approved follower."""
+        private_user = User.objects.create_user(email='private@example.com', username='private_u', password='Pass123!', is_private=True)
+        public_user = User.objects.create_user(email='public@example.com', username='public_u', password='Pass123!')
+
+        p_priv = Post.objects.create(user=private_user, title='Private Post', description='Desc', category='Tech', view_type='public')
+        p_pub = Post.objects.create(user=public_user, title='Public Post', description='Desc', category='Tech', view_type='public')
+
+        # 1. Alice is not following private_user
+        resp = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        titles = [p['title'] for p in resp.data.get('results', resp.data)]
+        self.assertIn('Public Post', titles)
+        self.assertNotIn('Private Post', titles)
+
+        # 2. Alice follows private_user
+        Follower.objects.create(follower=self.user, following=private_user)
+        resp = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        titles = [p['title'] for p in resp.data.get('results', resp.data)]
+        self.assertIn('Private Post', titles)
+
+    def test_moderation_reported_post_exclusion(self):
+        """Posts with 3 or more reports are excluded from feeds according to moderation policy."""
+        author = User.objects.create_user(email='author_m@example.com', username='author_m', password='Pass123!')
+        p_bad = Post.objects.create(user=author, title='Abusive Post (Reported 3x)', description='Desc', category='Tech', view_type='public')
+        p_good = Post.objects.create(user=author, title='Good Post (Reported 1x)', description='Desc', category='Tech', view_type='public')
+
+        # 3 distinct reporters for p_bad
+        for i in range(3):
+            reporter = User.objects.create_user(email=f'rep{i}@example.com', username=f'rep{i}', password='Pass123!')
+            PostReport.objects.create(post=p_bad, reporter=reporter, reason='Spam')
+
+        # 1 reporter for p_good
+        single_rep = User.objects.create_user(email='singlerep@example.com', username='singlerep', password='Pass123!')
+        PostReport.objects.create(post=p_good, reporter=single_rep, reason='Typo')
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        results = response.data.get('results', response.data)
+        titles = [p['title'] for p in results]
+        self.assertNotIn('Abusive Post (Reported 3x)', titles)
+        self.assertIn('Good Post (Reported 1x)', titles)

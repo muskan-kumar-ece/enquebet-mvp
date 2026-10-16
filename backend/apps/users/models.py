@@ -12,12 +12,15 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, unique=True)
     full_name = models.CharField(max_length=255)
+    headline = models.CharField(max_length=200, blank=True, default='')
     bio = models.TextField(blank=True)
     profile_image = models.URLField(max_length=500, blank=True)
     cover_image = models.URLField(max_length=500, blank=True)
     location = models.CharField(max_length=255, blank=True)
     college = models.CharField(max_length=255, blank=True)
     is_private = models.BooleanField(default=False)
+    verification_level = models.IntegerField(default=0)
+    reputation_score = models.IntegerField(default=0)
     
     # Resume / Portfolio fields
     education = models.JSONField(default=list, blank=True)
@@ -44,9 +47,16 @@ class User(AbstractUser):
 
 class UserSkill(models.Model):
     """User skills/specializations"""
+    SKILL_LEVEL_CHOICES = [
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced', 'Advanced'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='skills')
     skill_name = models.CharField(max_length=100)
+    level = models.CharField(max_length=20, choices=SKILL_LEVEL_CHOICES, default='intermediate')
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

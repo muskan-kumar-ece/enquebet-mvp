@@ -14,6 +14,12 @@ class Notification(models.Model):
         ('follow', 'Follow'),
         ('collaboration_request', 'Collaboration Request'),
         ('collaboration_accepted', 'Collaboration Accepted'),
+        ('collaboration_declined', 'Collaboration Declined'),
+        ('team_invitation', 'Team Invitation'),
+        ('team_removed', 'Team Member Removed'),
+        ('task_assigned', 'Task Assigned'),
+        ('deliverable_review', 'Deliverable Review'),
+        ('project_completed', 'Project Completed'),
         ('message', 'Message'),
         ('system', 'System'),
     ]
