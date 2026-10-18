@@ -1,26 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  /* ENQUEbet Custom Colors */
-  --color-bg-primary: #0b0b10;
-  --color-bg-card: #14141f;
-  --color-bg-card-elevated: #1a1a2a;
-  --color-bg-hover: #1f1f2e;
-  --color-bg-hover-light: #252538;
-  --color-border-default: #1e1e30;
-  --color-border-light: #2a2a3f;
-  --color-text-primary: #f0f2f8;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
-  --color-primary: #38b6ff;
-  --color-primary-dark: #0966c2;
-  --color-purple: #8b5cf6;
-  --color-purple-light: #a78bfa;
-  --color-purple-dark: #7c3aed;
-  --color-accent-glow: rgba(139, 92, 246, 0.12);
-  --color-accent-glow-strong: rgba(139, 92, 246, 0.25);
+  /* ENQUEbet Architectural Palette — Linear / Stripe Grade */
+  --color-bg-primary: #090a0f;
+  --color-bg-card: #0f111a;
+  --color-bg-card-elevated: #151824;
+  --color-bg-hover: #181b28;
+  --color-bg-hover-light: #222638;
+  --color-border-default: #1b1e2c;
+  --color-border-light: #262a3e;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  
+  /* Primary Functional Accents */
+  --color-primary: #1864ff;
+  --color-primary-dark: #0047cc;
 
-  /* Font Family — uses CSS variables injected by next/font/google */
+  /* Official ENQUEbet Architectural Brand Identity */
+  --color-brand-primary: #1864ff;
+  --color-brand-dark: #0b132b;
+  --color-brand-light: #528bff;
+  --color-brand-hairline: rgba(24, 100, 255, 0.35);
+
+  /* Status Colors */
+  --color-emerald-terminal: #10b981;
+  --color-amber-alert: #f59e0b;
+  --color-crimson-destructive: #ef4444;
+
+  /* Font Family */
   --font-family-sans: var(--font-inter), var(--font-source-sans), system-ui, -apple-system, sans-serif;
 }
 
@@ -36,6 +44,13 @@ body {
 /* Smooth scroll */
 html {
   scroll-behavior: smooth;
+}
+
+/* Architectural Millimeter Dot-Grid Background */
+.bg-blueprint-grid {
+  background-color: #090a0f;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* Custom Scrollbar */
@@ -55,8 +70,8 @@ html {
 
 /* Selection */
 ::selection {
-  background: rgba(139, 92, 246, 0.35);
-  color: white;
+  background: rgba(24, 100, 255, 0.35);
+  color: #ffffff;
 }
 
 /* Safe area for mobile bottom nav */
@@ -69,12 +84,13 @@ html {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 1rem;
-  border-radius: 0.625rem;
-  transition: all 0.2s ease;
+  padding: 0.55rem 0.875rem;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease;
   cursor: pointer;
   color: var(--color-text-secondary);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   position: relative;
 }
 
@@ -84,9 +100,9 @@ html {
 }
 
 .nav-item-active {
-  background-color: var(--color-accent-glow);
-  color: var(--color-purple-light);
-  font-weight: 500;
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .nav-item-active::before {
@@ -96,112 +112,199 @@ html {
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 60%;
-  background: var(--color-purple);
+  height: 55%;
+  background: var(--color-brand-primary);
   border-radius: 0 4px 4px 0;
 }
 
-/* ── Buttons ──────────────────────────────────── */
+/* ── Buttons — Linear & Stripe Grade Tactile Precision ──────────────── */
+
+/* Primary Action CTA — High-Contrast Stark White with Micro-Bevel */
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-purple-dark) 100%);
-  padding: 0.625rem 1.5rem;
-  border-radius: 0.625rem;
+  background-color: #f8fafc;
+  color: #090a0f;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  padding: 0.55rem 1.25rem;
+  border-radius: 0.5rem;
   font-weight: 600;
-  font-size: 0.9375rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, var(--color-purple-light) 0%, var(--color-purple) 100%);
-  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transform: translateY(-1px);
 }
 
 .btn-primary:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+  scale: 0.98;
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 
+/* Brand Accent CTA — Architect Cobalt with Top-Rim Bevel */
+.btn-brand {
+  background-color: var(--color-brand-primary);
+  color: #ffffff;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  padding: 0.55rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-brand:hover {
+  background-color: var(--color-brand-light);
+  box-shadow: 0 2px 8px rgba(24, 100, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-brand:active {
+  transform: translateY(0);
+  scale: 0.98;
+}
+
+/* Secondary / Outline Button — Tactile Graphite */
 .btn-outline {
-  border: 1px solid var(--color-border-light);
-  color: var(--color-text-primary);
-  padding: 0.625rem 1.5rem;
-  border-radius: 0.625rem;
+  background-color: #111219;
+  border: 1px solid #232635;
+  color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 0.55rem 1.25rem;
+  border-radius: 0.5rem;
   font-weight: 500;
-  font-size: 0.9375rem;
-  transition: all 0.2s ease;
-  background: transparent;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .btn-outline:hover {
-  border-color: var(--color-purple);
-  color: var(--color-purple-light);
-  background-color: var(--color-accent-glow);
+  background-color: #171822;
+  border-color: #383d54;
+  color: #ffffff;
 }
 
 .btn-outline:active {
-  background-color: var(--color-accent-glow-strong);
+  background-color: #1a1c28;
+  scale: 0.98;
+}
+
+/* Secondary alias */
+.btn-secondary {
+  background-color: #151824;
+  border: 1px solid #262a3e;
+  color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 0.55rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background-color: #1c2030;
+  color: #ffffff;
+  border-color: #383e58;
 }
 
 /* ── Cards ────────────────────────────────────── */
 .card {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border-default);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border-radius: 0.875rem;
   padding: 1.25rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: rgba(24, 100, 255, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .card-elevated {
   background-color: var(--color-bg-card-elevated);
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--color-border-light);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   border-radius: 0.875rem;
   padding: 1.25rem;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* ── Pills / Tags ─────────────────────────────── */
+.card-elevated:hover {
+  border-color: rgba(24, 100, 255, 0.5);
+}
+
+/* ── Pills / Badges ───────────────────────────── */
 .pill {
-  background-color: rgba(56, 182, 255, 0.12);
-  color: var(--color-primary);
-  padding: 0.3125rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.65rem;
   border-radius: 9999px;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.01em;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .pill:hover {
-  background-color: rgba(56, 182, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
-.pill-purple {
-  background-color: rgba(139, 92, 246, 0.15);
-  color: var(--color-purple-light);
-  padding: 0.3125rem 0.75rem;
+.pill-brand {
+  background-color: rgba(24, 100, 255, 0.1);
+  color: #60a5fa;
+  border: 1px solid rgba(24, 100, 255, 0.25);
+  padding: 0.25rem 0.65rem;
   border-radius: 9999px;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: all 0.15s ease;
+}
+
+.pill-brand:hover {
+  background-color: rgba(24, 100, 255, 0.18);
+  border-color: rgba(24, 100, 255, 0.4);
 }
 
 /* ── Inputs ───────────────────────────────────── */
 .input {
   background-color: var(--color-bg-primary);
   border: 1px solid var(--color-border-default);
-  border-radius: 0.625rem;
-  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.875rem;
   color: var(--color-text-primary);
-  font-size: 0.9375rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .input::placeholder {
@@ -210,32 +313,32 @@ html {
 
 .input:focus {
   outline: none;
-  border-color: var(--color-purple);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 1px var(--color-brand-primary);
 }
 
 /* ── Utility Animations ───────────────────────── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: scale(1); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+  animation: fadeIn 0.25s ease-out forwards;
 }
 
 .animate-slide-up {
-  animation: slideUp 0.35s ease-out forwards;
+  animation: slideUp 0.3s ease-out forwards;
 }
 
 .animate-scale-in {

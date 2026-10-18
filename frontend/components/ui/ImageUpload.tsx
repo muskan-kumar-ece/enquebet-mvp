@@ -206,11 +206,11 @@ export default function ImageUpload({ onImageUploaded, currentImage, className =
                         }
                     }}
                     disabled={uploading}
-                    className="w-full h-48 border-2 border-dashed border-border-default rounded-lg hover:border-purple transition-colors flex flex-col items-center justify-center gap-3 bg-bg-hover/50"
+                    className="w-full h-48 border-2 border-dashed border-border-default rounded-lg hover:border-brand-primary transition-colors flex flex-col items-center justify-center gap-3 bg-bg-hover/50"
                 >
                     {uploading ? (
                         <>
-                            <div className="w-8 h-8 border-2 border-purple border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
                             <p className="text-text-secondary">Uploading...</p>
                         </>
                     ) : (
@@ -295,7 +295,7 @@ export function AvatarUpload({ onImageUploaded, currentImage }: ImageUploadProps
 
             <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-32 h-32 rounded-full border-4 border-purple/30 overflow-hidden cursor-pointer hover:border-purple transition-colors relative group"
+                className="w-32 h-32 rounded-full border-2 border-brand-primary/40 overflow-hidden cursor-pointer hover:border-brand-primary transition-colors relative group ring-2 ring-brand-primary/10"
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -307,14 +307,14 @@ export function AvatarUpload({ onImageUploaded, currentImage }: ImageUploadProps
                 {preview ? (
                     <img src={preview} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full bg-purple flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-brand-primary to-brand-dark flex items-center justify-center">
                         <ImageIcon className="w-12 h-12 text-white/50" />
                     </div>
                 )}
 
                 {uploading && (
                     <div className="absolute inset-0 bg-bg-primary/80 flex items-center justify-center">
-                        <div className="w-8 h-8 border-2 border-purple border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 )}
 
@@ -381,7 +381,7 @@ export function CoverUpload({ onImageUploaded, currentImage, className = '' }: I
     };
 
     return (
-        <div className={`relative w-full h-36 sm:h-44 md:h-52 rounded-t-xl overflow-hidden bg-gradient-to-r from-purple/30 via-primary/20 to-purple/10 ${className}`}>
+        <div className={`relative w-full h-36 sm:h-44 md:h-52 rounded-t-xl overflow-hidden bg-gradient-to-r from-brand-dark/40 via-surface-card to-brand-primary/10 border-b border-border-default ${className}`}>
             <input
                 ref={fileInputRef}
                 type="file"
@@ -409,12 +409,12 @@ export function CoverUpload({ onImageUploaded, currentImage, className = '' }: I
                 >
                     {uploading ? (
                         <>
-                            <div className="w-3.5 h-3.5 border-2 border-purple border-t-transparent rounded-full animate-spin" />
+                            <div className="w-3.5 h-3.5 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                             <span>Uploading...</span>
                         </>
                     ) : (
                         <>
-                            <Upload className="w-3.5 h-3.5 text-purple-light" />
+                            <Upload className="w-3.5 h-3.5 text-brand-light" />
                             <span>Change Cover</span>
                         </>
                     )}

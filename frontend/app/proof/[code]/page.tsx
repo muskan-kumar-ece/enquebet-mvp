@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 export default function PublicProofPage() {
     const params = useParams();
@@ -104,10 +105,10 @@ export default function PublicProofPage() {
                 <div className="flex items-center justify-between text-sm">
                     <Link 
                         href="/" 
-                        className="flex items-center gap-1.5 text-text-muted hover:text-text-primary transition-colors"
+                        className="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors group"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>ENQUEbet Verification Ledger</span>
+                        <BrandLogo size="xs" mode="vector" />
+                        <span className="font-semibold text-white tracking-tight">ENQUEbet Verification Ledger</span>
                     </Link>
 
                     <button
@@ -120,18 +121,21 @@ export default function PublicProofPage() {
                 </div>
 
                 {/* Master Credential Card */}
-                <div className="card border-green-500/40 bg-gradient-to-b from-green-500/10 via-bg-card to-bg-card p-6 sm:p-8 space-y-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 rounded-full blur-3xl pointer-events-none" />
+                <div className="card border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 via-bg-card to-bg-card p-6 sm:p-8 space-y-6 relative overflow-hidden">
+                    {/* Official Watermark */}
+                    <div className="absolute -bottom-10 -right-10 w-56 h-56 opacity-[0.035] pointer-events-none select-none">
+                        <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+                    </div>
 
                     {/* Header Badge */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 rounded-2xl bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 shadow-inner">
-                                <ShieldCheck className="w-8 h-8" />
+                            <div className="w-14 h-14 rounded-2xl bg-[#0c101d] border border-emerald-500/30 flex items-center justify-center p-2 shadow-sm relative">
+                                <BrandLogo size="md" mode="vector" />
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold uppercase tracking-wider text-green-400">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                                         Cryptographically Verified
                                     </span>
                                     <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.2 rounded-full font-mono">
@@ -146,7 +150,7 @@ export default function PublicProofPage() {
 
                         <div className="text-right sm:self-center">
                             <span className="text-xs text-text-muted">Verification ID</span>
-                            <p className="font-mono text-base font-bold text-purple-light">{proof.verification_code}</p>
+                            <p className="font-mono text-base font-bold text-brand-light">{proof.verification_code}</p>
                         </div>
                     </div>
 
@@ -167,9 +171,9 @@ export default function PublicProofPage() {
                             <span className="text-text-muted">Immutable Content Hash (SHA-256):</span>
                             <button
                                 onClick={handleCopyHash}
-                                className="text-purple-light hover:text-purple text-[11px] flex items-center gap-1 font-mono transition-colors"
+                                className="text-brand-light hover:text-white text-[11px] flex items-center gap-1 font-mono transition-colors"
                             >
-                                {copiedHash ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                {copiedHash ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                                 <span>{copiedHash ? 'Hash Copied' : 'Copy Hash'}</span>
                             </button>
                         </div>
@@ -183,7 +187,7 @@ export default function PublicProofPage() {
                         <div>
                             <span className="text-text-muted">Delivered Tasks</span>
                             <p className="text-base font-bold text-text-primary mt-0.5 flex items-center gap-1.5">
-                                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                                 <span>{completedTasksCount} Verified</span>
                             </p>
                         </div>
@@ -191,7 +195,7 @@ export default function PublicProofPage() {
                         <div>
                             <span className="text-text-muted">Team Size</span>
                             <p className="text-base font-bold text-text-primary mt-0.5 flex items-center gap-1.5">
-                                <Users className="w-4 h-4 text-purple" />
+                                <Users className="w-4 h-4 text-brand-light" />
                                 <span>{team.length} Builders</span>
                             </p>
                         </div>
@@ -208,7 +212,7 @@ export default function PublicProofPage() {
 
                         <div>
                             <span className="text-text-muted">Consensus State</span>
-                            <p className="text-base font-bold text-green-400 mt-0.5">
+                            <p className="text-base font-bold text-emerald-400 mt-0.5">
                                 100% Complete
                             </p>
                         </div>
@@ -217,7 +221,7 @@ export default function PublicProofPage() {
                     {/* Cryptographic Scope & Integrity Note */}
                     <div className="p-3 bg-bg-card-elevated border border-border-default/80 rounded-xl text-xs space-y-1">
                         <div className="flex items-center gap-1.5 text-text-secondary font-semibold">
-                            <ShieldCheck className="w-4 h-4 text-green-400" />
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
                             <span>Integrity Verification Scope</span>
                         </div>
                         <p className="text-[11px] text-text-muted leading-relaxed">
@@ -229,13 +233,13 @@ export default function PublicProofPage() {
                 {/* Verified Contributing Builders */}
                 <div className="card space-y-4">
                     <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple" />
+                        <Users className="w-4 h-4 text-brand-light" />
                         <span>Verified Contributing Builders ({team.length})</span>
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {team.map((builder: any, idx: number) => (
                             <div key={idx} className="p-3 bg-bg-card-elevated border border-border-default rounded-xl flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-purple/10 border border-purple/30 flex items-center justify-center font-bold text-sm text-purple">
+                                <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center font-bold text-sm text-brand-light">
                                     {(builder.role_title || builder.role || 'B')[0].toUpperCase()}
                                 </div>
                                 <div className="min-w-0">

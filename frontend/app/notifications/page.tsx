@@ -137,7 +137,7 @@ export default function NotificationsPage() {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'collaboration_request': return <Users className="w-5 h-5 text-purple" />;
+            case 'collaboration_request': return <Users className="w-5 h-5 text-brand-light" />;
             case 'collaboration_accepted': return <Users className="w-5 h-5 text-green-500" />;
             case 'like': return <Heart className="w-5 h-5 text-red-500" />;
             case 'comment': return <MessageCircle className="w-5 h-5 text-primary" />;
@@ -214,7 +214,7 @@ export default function NotificationsPage() {
                                 <div
                                     key={notif.id}
                                     onClick={() => handleNotifClick(notif)}
-                                    className={`card cursor-pointer transition-all hover:border-purple/50 ${!isRead ? 'border-l-4 border-l-purple' : ''
+                                    className={`card cursor-pointer transition-all hover:border-brand-primary/50 ${!isRead ? 'border-l-4 border-l-brand-primary' : ''
                                         }`}
                                 >
                                     <div className="flex gap-4">
@@ -238,7 +238,7 @@ export default function NotificationsPage() {
                                                     )}
                                                 </p>
                                                 {!isRead && (
-                                                    <div className="w-2 h-2 bg-purple rounded-full shrink-0 mt-1.5" />
+                                                    <div className="w-2 h-2 bg-brand-primary rounded-full shrink-0 mt-1.5" />
                                                 )}
                                             </div>
 
@@ -281,7 +281,7 @@ export default function NotificationsPage() {
                                             {/* Accepted notification — link to collaboration page */}
                                             {isAccepted && (
                                                 <button
-                                                    className="mt-2 text-xs text-purple hover:text-purple-light flex items-center gap-1"
+                                                    className="mt-2 text-xs text-brand-light hover:text-white flex items-center gap-1"
                                                     onClick={(e) => { e.stopPropagation(); router.push('/collaboration'); }}
                                                 >
                                                     <Users className="w-3 h-3" />

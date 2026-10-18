@@ -87,7 +87,7 @@ export default function CollaborationPage() {
                 {/* Header */}
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold flex items-center gap-3">
-                        <Users className="w-8 h-8 text-purple" />
+                        <Users className="w-8 h-8 text-brand-light" />
                         Build With
                     </h1>
                     <p className="text-text-secondary mt-2">
@@ -102,7 +102,7 @@ export default function CollaborationPage() {
                             key={t}
                             onClick={() => setTab(t)}
                             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all capitalize ${tab === t
-                                    ? 'bg-purple text-white shadow'
+                                    ? 'bg-brand-primary text-white font-semibold shadow-sm'
                                     : 'text-text-secondary hover:text-primary'
                                 }`}
                         >
@@ -145,7 +145,7 @@ export default function CollaborationPage() {
                                 <div key={req.id} className="card">
                                     <div className="flex items-start gap-4">
                                         {/* Avatar */}
-                                        <div className="w-12 h-12 rounded-full bg-purple shrink-0 flex items-center justify-center font-bold text-lg">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark ring-2 ring-brand-primary/20 shrink-0 flex items-center justify-center font-bold text-lg text-white">
                                             {(otherUser?.full_name || otherUser?.username || 'U')[0].toUpperCase()}
                                         </div>
 
@@ -163,7 +163,7 @@ export default function CollaborationPage() {
                                             {/* Post */}
                                             <button
                                                 onClick={() => router.push(`/posts/${req.post?.id}`)}
-                                                className="text-sm text-text-secondary hover:text-purple transition-colors flex items-center gap-1 mb-2"
+                                                className="text-sm text-text-secondary hover:text-brand-light transition-colors flex items-center gap-1 mb-2"
                                             >
                                                 Re: {req.post?.title || 'Untitled post'}
                                                 <ChevronRight className="w-3 h-3" />
@@ -207,7 +207,7 @@ export default function CollaborationPage() {
                                                 <div className="flex items-center gap-4">
                                                     <Link
                                                         href={`/workspace/${req.post?.id}`}
-                                                        className="text-sm font-medium text-purple hover:text-purple-light flex items-center gap-1"
+                                                        className="text-sm font-medium text-brand-light hover:text-white flex items-center gap-1"
                                                     >
                                                         <span>Open workspace →</span>
                                                     </Link>

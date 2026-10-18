@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/v1/workspaces/', include('apps.collaboration.workspace_urls')),
     path('api/v1/proofs/', include('apps.collaboration.proof_urls')),
     path('api/v1/chats/', include('apps.chats.urls')),
+    path('api/v1/messages/', include('apps.chats.urls')),
     path('api/v1/notifications/', include('apps.notifications.urls')),
     path('api/v1/search/', include('apps.search.urls')),
     path('api/v1/uploads/', include('apps.uploads.urls')),

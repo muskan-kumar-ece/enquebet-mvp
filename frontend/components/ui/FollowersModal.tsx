@@ -120,7 +120,7 @@ export default function FollowersModal({ userId, type, onClose }: FollowersModal
                             return (
                                 <div key={u.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-bg-hover/50 transition-colors">
                                     <Link href={isSelf ? '/profile' : `/profile/${u.id}`} onClick={onClose}>
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple to-purple-dark flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-purple/20">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-brand-primary/20">
                                             {u.avatar_url ? (
                                                 <img src={u.avatar_url} alt={u.username} className="w-full h-full object-cover" />
                                             ) : (
@@ -132,7 +132,7 @@ export default function FollowersModal({ userId, type, onClose }: FollowersModal
                                     </Link>
                                     <div className="flex-1 min-w-0">
                                         <Link href={isSelf ? '/profile' : `/profile/${u.id}`} onClick={onClose}>
-                                            <p className="font-semibold text-sm truncate hover:text-purple transition-colors">
+                                            <p className="font-semibold text-sm truncate hover:text-brand-light transition-colors">
                                                 {u.full_name || u.username}
                                             </p>
                                             <p className="text-text-muted text-xs truncate">@{u.username}</p>
@@ -145,7 +145,7 @@ export default function FollowersModal({ userId, type, onClose }: FollowersModal
                                             className={`text-xs px-4 py-1.5 rounded-lg font-medium transition-all ${
                                                 isFollowing
                                                     ? 'border border-border-default text-text-muted hover:border-red-500/50 hover:text-red-400'
-                                                    : 'bg-purple text-white hover:bg-purple-dark shadow-sm shadow-purple/20'
+                                                    : 'btn-primary'
                                             }`}
                                         >
                                             {isLoading ? '...' : isFollowing ? 'Unfollow' : 'Follow'}

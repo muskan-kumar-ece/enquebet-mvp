@@ -1,144 +1,70 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { api } from '@/lib/api';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
-export default function SettingsPage() {
+import { SettingsNav, SettingsTab } from '@/components/settings/SettingsNav';
+import { AccountSection } from '@/components/settings/AccountSection';
+import { SecuritySection } from '@/components/settings/SecuritySection';
+import { TimeManagementSection } from '@/components/settings/TimeManagementSection';
+import { ProfessionalDashboardSection } from '@/components/settings/ProfessionalDashboardSection';
+import { SavedItemsSection } from '@/components/settings/SavedItemsSection';
+import { SafetySection } from '@/components/settings/SafetySection';
+import { AboutSection } from '@/components/settings/AboutSection';
+import { LegalSection } from '@/components/settings/LegalSection';
+import { DangerZoneModal } from '@/components/settings/DangerZoneModal';
+
+function SettingsContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, loading: authLoading } = useRequireAuth();
     const { logout, updateUser } = useAuth();
 
-    const [savingAccount, setSavingAccount] = useState(false);
-    const [savingPrivacy, setSavingPrivacy] = useState(false);
-    const [changingPassword, setChangingPassword] = useState(false);
-    const [deletingAccount, setDeletingAccount] = useState(false);
-    const [deletingPosts, setDeletingPosts] = useState(false);
+    const paramTab = (searchParams.get('tab') as SettingsTab) || 'account';
+    const validTabs: SettingsTab[] = [
+        'account', 'security', 'time', 'professional', 
+        'saved', 'safety', 'about', 'legal', 'danger'
+    ];
+    const initialTab = validTabs.includes(paramTab) ? paramTab : 'account';
 
-    const [accountData, setAccountData] = useState({
-        username: '',
-        email: '',
-    });
+    const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
-    const [privacyData, setPrivacyData] = useState({
-        is_private: false,
-    });
-
-    const [passwordData, setPasswordData] = useState({
-        current_password: '',
-        new_password: '',
-        confirm_new_password: '',
-    });
-
+    // Sync tab from URL if changed externally
     useEffect(() => {
-        if (!authLoading && user) {
-            setAccountData({
-                username: user.username || '',
-                email: user.email || '',
-            });
-            setPrivacyData({
-                is_private: Boolean(user.is_private),
-            });
+        const currentParam = searchParams.get('tab') as SettingsTab;
+        if (currentParam && validTabs.includes(currentParam) && currentParam !== activeTab) {
+            setActiveTab(currentParam);
         }
-    }, [authLoading, user]);
+    }, [searchParams]);
 
-    if (authLoading || !user) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-text-secondary">Loading...</div>
-            </div>
-        );
-    }
-
-    const handleSaveAccount = async () => {
-        setSavingAccount(true);
-        try {
-            const updated = await api.updateMe({
-                username: accountData.username,
-                email: accountData.email,
-            });
-            updateUser(updated);
-            toast.success('Account updated');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to update account');
-        } finally {
-            setSavingAccount(false);
-        }
+    const handleSelectTab = (tab: SettingsTab) => {
+        setActiveTab(tab);
+        const url = tab === 'account' ? '/settings' : `/settings?tab=${tab}`;
+        router.replace(url, { scroll: false });
     };
 
-    const handleChangePassword = async () => {
-        if (!passwordData.current_password || !passwordData.new_password) {
-            toast.error('Please fill all password fields');
-            return;
-        }
-        if (passwordData.new_password !== passwordData.confirm_new_password) {
-            toast.error('New passwords do not match');
-            return;
-        }
-
-        setChangingPassword(true);
-        try {
-            await api.changeMyPassword(passwordData.current_password, passwordData.new_password);
-            setPasswordData({ current_password: '', new_password: '', confirm_new_password: '' });
-            toast.success('Password updated');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to update password');
-        } finally {
-            setChangingPassword(false);
-        }
+    const handleUpdateUser = async (data: any) => {
+        const updated = await api.updateMe(data);
+        updateUser(updated);
     };
 
-    const handleSavePrivacy = async () => {
-        setSavingPrivacy(true);
-        try {
-            const updated = await api.updateMe({
-                is_private: privacyData.is_private,
-            });
-            updateUser(updated);
-            toast.success('Privacy settings updated');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to update privacy');
-        } finally {
-            setSavingPrivacy(false);
-        }
+    const handleUpdateAvailability = async (status: string) => {
+        const updated = await api.updateMe({ availability_status: status });
+        updateUser(updated);
     };
 
-    const handleDeleteAllPosts = async () => {
-        const ok = confirm('Delete all your posts? This cannot be undone.');
-        if (!ok) return;
-
-        setDeletingPosts(true);
+    const handleLogout = async (allDevices: boolean = false) => {
         try {
-            await api.deleteMyPosts();
-            toast.success('All posts deleted');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to delete posts');
-        } finally {
-            setDeletingPosts(false);
-        }
-    };
-
-    const handleDeleteAccount = async () => {
-        const ok = confirm('Delete your account permanently? This cannot be undone.');
-        if (!ok) return;
-
-        setDeletingAccount(true);
-        try {
-            await api.deleteMe();
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to delete account');
-            setDeletingAccount(false);
-            return;
-        }
-
-        // Clear local auth state and redirect.
-        try {
+            if (allDevices) {
+                await api.revokeAllOtherSessions();
+            }
             await logout();
         } catch {
-            // Ensure localStorage is cleared even if logout API fails
             try {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
@@ -147,166 +73,136 @@ export default function SettingsPage() {
                 // ignore
             }
         }
+        toast.success(allDevices ? 'Signed out from all devices' : 'Signed out');
+        router.push('/auth/login');
+    };
 
-        toast.success('Account deleted');
+    const handleAccountDeleted = async () => {
+        try {
+            await logout();
+        } catch {
+            try {
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+            } catch {
+                // ignore
+            }
+        }
         router.push('/auth/register');
     };
 
+    const handlePostsDeleted = () => {
+        // Refresh or notify
+    };
+
+    if (authLoading || !user) {
+        return (
+            <div className="min-h-screen bg-[#08090E] flex items-center justify-center">
+                <div className="flex items-center gap-3 text-xs text-text-secondary">
+                    <span className="w-2 h-2 rounded-full bg-[#1864ff] animate-ping" />
+                    <span>Loading settings ecosystem...</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="min-h-screen p-6">
-            <div className="max-w-3xl mx-auto space-y-6">
-                <div>
-                    <h1 className="text-3xl font-bold">Settings</h1>
-                    <p className="text-text-secondary mt-1">Manage your account, privacy, and data.</p>
-                </div>
+        <div className="min-h-screen bg-[#08090E] text-slate-100">
+            {/* Background Grid */}
+            <div className="fixed inset-0 bg-blueprint-grid opacity-15 pointer-events-none" />
 
-                {/* Account */}
-                <div className="card">
-                    <h2 className="text-xl font-bold mb-4">Account</h2>
+            <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+                {/* Top Brand Dock */}
+                <div className="p-4 rounded-2xl bg-[#0B0D14]/90 border border-[#1E2335] backdrop-blur-md flex items-center justify-between shadow-lg">
+                    <BrandLogo size="sm" mode="vector" withText={true} />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Username</label>
-                            <input
-                                className="input w-full"
-                                value={accountData.username}
-                                onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
-                                placeholder="Your username"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Email</label>
-                            <input
-                                className="input w-full"
-                                value={accountData.email}
-                                onChange={(e) => setAccountData({ ...accountData, email: e.target.value })}
-                                placeholder="you@email.com"
-                                type="email"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3 mt-4">
-                        <button
-                            className="btn-primary"
-                            disabled={savingAccount}
-                            onClick={handleSaveAccount}
-                        >
-                            {savingAccount ? 'Saving...' : 'Save Account'}
-                        </button>
-
-                        <button
-                            className="btn-outline"
-                            onClick={() => logout()}
-                        >
-                            Logout
-                        </button>
-
-                        <button
-                            className="btn-outline"
-                            disabled={deletingAccount}
-                            onClick={handleDeleteAccount}
-                        >
-                            {deletingAccount ? 'Deleting...' : 'Delete Account'}
-                        </button>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 hidden sm:inline-block">
+                            Logged in as:
+                        </span>
+                        <span className="text-xs font-bold text-white font-mono px-2 py-0.5 rounded bg-surface border border-border">
+                            @{user.username}
+                        </span>
                     </div>
                 </div>
 
-                {/* Password */}
-                <div className="card">
-                    <h2 className="text-xl font-bold mb-4">Change Password</h2>
+                {/* Master Layout: Sidebar + Active Section */}
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                    {/* Left Navigation */}
+                    <SettingsNav
+                        activeTab={activeTab}
+                        onSelectTab={handleSelectTab}
+                    />
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Current Password</label>
-                            <input
-                                className="input w-full"
-                                value={passwordData.current_password}
-                                onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
-                                type="password"
-                                placeholder="Enter current password"
+                    {/* Right Active Panel */}
+                    <main className="flex-1 w-full min-w-0 bg-[#08090E] rounded-2xl">
+                        {activeTab === 'account' && (
+                            <AccountSection
+                                user={user}
+                                onUpdateUser={handleUpdateUser}
+                                onLogout={handleLogout}
                             />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">New Password</label>
-                            <input
-                                className="input w-full"
-                                value={passwordData.new_password}
-                                onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
-                                type="password"
-                                placeholder="Enter new password"
+                        )}
+
+                        {activeTab === 'security' && (
+                            <SecuritySection />
+                        )}
+
+                        {activeTab === 'time' && (
+                            <TimeManagementSection
+                                user={user}
+                                onUpdateUser={handleUpdateUser}
                             />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-                            <input
-                                className="input w-full"
-                                value={passwordData.confirm_new_password}
-                                onChange={(e) => setPasswordData({ ...passwordData, confirm_new_password: e.target.value })}
-                                type="password"
-                                placeholder="Re-enter new password"
+                        )}
+
+                        {activeTab === 'professional' && (
+                            <ProfessionalDashboardSection
+                                user={user}
+                                onUpdateAvailability={handleUpdateAvailability}
                             />
-                        </div>
+                        )}
 
-                        <button
-                            className="btn-primary"
-                            disabled={changingPassword}
-                            onClick={handleChangePassword}
-                        >
-                            {changingPassword ? 'Updating...' : 'Update Password'}
-                        </button>
-                    </div>
-                </div>
+                        {activeTab === 'saved' && (
+                            <SavedItemsSection />
+                        )}
 
-                {/* Privacy */}
-                <div className="card">
-                    <h2 className="text-xl font-bold mb-4">Privacy</h2>
-
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <div className="font-medium">Private account</div>
-                            <div className="text-text-secondary text-sm">When enabled, your account is marked as private.</div>
-                        </div>
-                        <label className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={privacyData.is_private}
-                                onChange={(e) => setPrivacyData({ is_private: e.target.checked })}
+                        {activeTab === 'safety' && (
+                            <SafetySection
+                                user={user}
+                                onUpdateUser={handleUpdateUser}
                             />
-                            <span className="text-sm text-text-secondary">{privacyData.is_private ? 'Private' : 'Public'}</span>
-                        </label>
-                    </div>
+                        )}
 
-                    <div className="mt-4">
-                        <button
-                            className="btn-primary"
-                            disabled={savingPrivacy}
-                            onClick={handleSavePrivacy}
-                        >
-                            {savingPrivacy ? 'Saving...' : 'Save Privacy'}
-                        </button>
-                    </div>
-                </div>
+                        {activeTab === 'about' && (
+                            <AboutSection />
+                        )}
 
-                {/* Data */}
-                <div className="card">
-                    <h2 className="text-xl font-bold mb-4">Data</h2>
+                        {activeTab === 'legal' && (
+                            <LegalSection />
+                        )}
 
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <div className="font-medium">Delete all posts</div>
-                            <div className="text-text-secondary text-sm">Removes all posts you created.</div>
-                        </div>
-                        <button
-                            className="btn-outline"
-                            disabled={deletingPosts}
-                            onClick={handleDeleteAllPosts}
-                        >
-                            {deletingPosts ? 'Deleting...' : 'Delete All Posts'}
-                        </button>
-                    </div>
+                        {activeTab === 'danger' && (
+                            <DangerZoneModal
+                                onAccountDeleted={handleAccountDeleted}
+                                onPostsDeleted={handlePostsDeleted}
+                            />
+                        )}
+                    </main>
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#08090E] flex items-center justify-center">
+                <div className="text-xs text-text-secondary">Loading settings...</div>
+            </div>
+        }>
+            <SettingsContent />
+        </Suspense>
     );
 }

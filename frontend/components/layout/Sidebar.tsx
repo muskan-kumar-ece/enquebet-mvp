@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWebSocket } from '@/lib/contexts/WebSocketContext';
 import { useState, useEffect } from 'react';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 
 const coreNavItems = [
     { icon: Home, label: 'Home', href: '/' },
@@ -58,9 +59,9 @@ export default function Sidebar() {
                 onClick={() => setMobileOpen(false)}
             >
                 <span className="relative">
-                    <Icon className={`w-5 h-5 ${isActive ? 'text-purple' : ''}`} />
+                    <Icon className={`w-5 h-5 ${isActive ? 'text-brand-light' : ''}`} />
                     {item.href === '/notifications' && unreadCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 bg-purple text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none ring-2 ring-bg-primary">
+                        <span className="absolute -top-1.5 -right-1.5 bg-brand-primary text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none ring-2 ring-bg-primary">
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     )}
@@ -75,12 +76,15 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="p-5 pb-4 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-3 group" onClick={() => setMobileOpen(false)}>
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple to-purple-dark rounded-xl flex items-center justify-center shadow-lg shadow-purple/20 group-hover:shadow-purple/30 transition-shadow">
-                        <span className="text-xl font-black tracking-tight text-white">E</span>
-                    </div>
+                    <BrandLogo size="md" mode="vector" />
                     <div>
-                        <span className="text-lg font-bold tracking-tight">ENQUEbet</span>
-                        <span className="block text-[10px] text-text-muted font-medium tracking-wider uppercase -mt-0.5">Build Together</span>
+                        <div className="text-lg font-black tracking-tight text-white flex items-center">
+                            <span>ENQUE</span>
+                            <span className="text-[#1864FF] font-black ml-0.5">
+                                bet
+                            </span>
+                        </div>
+                        <span className="block text-[10px] text-zinc-500 font-mono font-medium tracking-wider uppercase -mt-0.5">Build Together</span>
                     </div>
                 </Link>
 
@@ -114,7 +118,7 @@ export default function Sidebar() {
                     className={`nav-item ${pathname === '/settings' ? 'nav-item-active' : ''}`}
                     onClick={() => setMobileOpen(false)}
                 >
-                    <Settings className={`w-5 h-5 ${pathname === '/settings' ? 'text-purple' : ''}`} />
+                    <Settings className={`w-5 h-5 ${pathname === '/settings' ? 'text-brand-light' : ''}`} />
                     <span>Settings</span>
                 </Link>
             </div>
@@ -133,17 +137,18 @@ export default function Sidebar() {
                     <Menu className="w-5 h-5" />
                 </button>
                 <Link href="/" className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-purple to-purple-dark rounded-lg flex items-center justify-center">
-                        <span className="text-sm font-black text-white">E</span>
+                    <BrandLogo size="sm" mode="vector" />
+                    <div className="font-black text-sm tracking-tight text-white flex items-center">
+                        <span>ENQUE</span>
+                        <span className="text-[#1864FF] ml-0.5">bet</span>
                     </div>
-                    <span className="font-bold text-base">ENQUEbet</span>
                 </Link>
 
                 {/* Notification badge on mobile bar */}
                 {unreadCount > 0 && (
                     <Link href="/notifications" className="ml-auto relative p-2">
                         <Bell className="w-5 h-5" />
-                        <span className="absolute top-1 right-1 bg-purple text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                        <span className="absolute top-1 right-1 bg-brand-primary text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     </Link>

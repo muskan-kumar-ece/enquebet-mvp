@@ -16,10 +16,18 @@ interface WebSocketContextType {
     onNotification: (handler: (data: any) => void) => () => void;
     /** Subscribe to chat messages for the currently connected room. Returns unsubscribe fn. */
     onChatMessage: (handler: (data: any) => void) => () => void;
+    /** Subscribe to typing events in the current room */
+    onChatTyping: (handler: (data: any) => void) => () => void;
+    /** Subscribe to read receipt events in the current room */
+    onChatRead: (handler: (data: any) => void) => () => void;
     /** Connect chat WS to a specific conversation */
     connectChat: (conversationId: string) => void;
     /** Send a chat message to the currently connected conversation */
-    sendChatMessage: (content: string) => void;
+    sendChatMessage: (content: string, attachment_url?: string) => void;
+    /** Broadcast typing indicator */
+    sendChatTyping: (isTyping: boolean) => void;
+    /** Send read receipt */
+    sendChatRead: () => void;
     /** Total unread notification count (for badge) */
     unreadCount: number;
     /** Call when notifications are viewed to reset badge */
@@ -90,8 +98,26 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         return chatWS.current.on('chat_message', handler);
     }, []);
 
-    const sendChatMessage = useCallback((content: string) => {
-        chatWS.current?.send({ content });
+    const onChatTyping = useCallback((handler: (data: any) => void) => {
+        if (!chatWS.current) return () => { };
+        return chatWS.current.on('chat_typing', handler);
+    }, []);
+
+    const onChatRead = useCallback((handler: (data: any) => void) => {
+        if (!chatWS.current) return () => { };
+        return chatWS.current.on('chat_read', handler);
+    }, []);
+
+    const sendChatMessage = useCallback((content: string, attachment_url?: string) => {
+        chatWS.current?.send({ content, attachment_url });
+    }, []);
+
+    const sendChatTyping = useCallback((isTyping: boolean) => {
+        chatWS.current?.send({ type: 'typing', is_typing: isTyping });
+    }, []);
+
+    const sendChatRead = useCallback(() => {
+        chatWS.current?.send({ type: 'read' });
     }, []);
 
     const clearUnread = useCallback(() => setUnreadCount(0), []);
@@ -101,8 +127,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             value={{
                 onNotification,
                 onChatMessage,
+                onChatTyping,
+                onChatRead,
                 connectChat,
                 sendChatMessage,
+                sendChatTyping,
+                sendChatRead,
                 unreadCount,
                 clearUnread,
             }}

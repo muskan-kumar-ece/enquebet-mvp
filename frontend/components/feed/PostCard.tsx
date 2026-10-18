@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Users, Bookmark, MoreVertical, Flag } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Users, Bookmark, MoreVertical, Flag, MapPin, Globe, GraduationCap, Lightbulb } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDistance } from '@/lib/geo';
 import toast from 'react-hot-toast';
 
 interface PostCardProps {
@@ -19,6 +20,12 @@ interface PostCardProps {
     is_liked?: boolean;
     is_saved?: boolean;
     image?: string;
+    city?: string;
+    distance_km?: number | null;
+    is_remote?: boolean;
+    view_type?: string;
+    college?: string;
+    category?: string;
     onRefresh?: () => void;
 }
 
@@ -35,6 +42,12 @@ export default function PostCard({
     is_liked: initialIsLiked = false,
     is_saved: initialIsSaved = false,
     image,
+    city,
+    distance_km,
+    is_remote,
+    view_type,
+    college,
+    category,
     onRefresh,
 }: PostCardProps) {
     const [likes, setLikes] = useState(initialLikes);
@@ -168,22 +181,22 @@ export default function PostCard({
 
     return (
         <Link href={`/posts/${id}`}>
-            <div className="w-full bg-[#171722] border border-[#252533] rounded-xl p-4 hover:border-purple/40 hover:shadow-lg hover:shadow-purple/5 transition-all duration-200 cursor-pointer relative group">
+            <div className="w-full card p-5 hover:border-brand-primary/40 hover:shadow-[0_4px_24px_rgba(24,100,255,0.08)] transition-all duration-200 cursor-pointer relative group">
                 {/* Author & Options */}
                 <div className="flex items-center gap-3 mb-4">
                     {authorAvatar ? (
                         <img
                             src={authorAvatar}
                             alt={author}
-                            className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-[#252533]"
+                            className="w-11 h-11 rounded-full object-cover shrink-0 border border-border-default/80 ring-1 ring-white/5"
                         />
                     ) : (
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple to-purple-dark shrink-0 flex items-center justify-center text-sm font-bold text-white shadow-md shadow-purple/20">
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark shrink-0 flex items-center justify-center text-sm font-bold text-white shadow-md shadow-brand-primary/20 ring-1 ring-brand-primary/30">
                             {author.charAt(0).toUpperCase()}
                         </div>
                     )}
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-[0.9375rem]">{author}</h3>
+                        <h3 className="font-bold text-[0.9375rem] text-text-primary group-hover:text-brand-light transition-colors">{author}</h3>
                         <p className="text-text-muted text-xs">{timeAgo}</p>
                     </div>
 
@@ -208,6 +221,42 @@ export default function PostCard({
                         )}
                     </div>
                 </div>
+
+                {/* Discovery Badges: Remote, Distance, College, Open Idea */}
+                {(is_remote || distance_km !== undefined || city || view_type === 'college' || view_type === 'openidea' || category) && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                        {is_remote && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <Globe className="w-3 h-3" /> Remote
+                            </span>
+                        )}
+                        {!is_remote && distance_km !== undefined && distance_km !== null && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                <MapPin className="w-3 h-3" /> {city ? `${city} · ` : ''}{formatDistance(distance_km)}
+                            </span>
+                        )}
+                        {!is_remote && (distance_km === undefined || distance_km === null) && city && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 text-text-secondary border border-white/10">
+                                <MapPin className="w-3 h-3" /> {city}
+                            </span>
+                        )}
+                        {view_type === 'college' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-primary/10 text-brand-light border border-brand-primary/20">
+                                <GraduationCap className="w-3 h-3" /> {college || 'Campus Exclusive'}
+                            </span>
+                        )}
+                        {view_type === 'openidea' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                <Lightbulb className="w-3 h-3" /> Open Idea
+                            </span>
+                        )}
+                        {category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#212130] text-text-secondary">
+                                {category}
+                            </span>
+                        )}
+                    </div>
+                )}
 
                 {/* Content */}
                 <h2 className="text-lg font-bold mb-1.5 leading-snug">{title}</h2>
@@ -265,10 +314,10 @@ export default function PostCard({
                     </button>
                     <button
                         onClick={handleBuildWith}
-                        className="flex items-center gap-1.5 text-sm text-purple hover:text-purple-light transition-colors ml-auto"
+                        className="flex items-center gap-1.5 text-xs text-brand-light bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/30 px-3 py-1.5 rounded-lg transition-all ml-auto font-semibold shadow-[0_0_12px_rgba(24,100,255,0.12)] hover:scale-[1.02] active:scale-[0.98]"
                     >
-                        <Users className="w-[18px] h-[18px]" />
-                        <span className="font-semibold">Build With</span>
+                        <Users className="w-3.5 h-3.5 text-brand-light" />
+                        <span>Build With</span>
                     </button>
                 </div>
 

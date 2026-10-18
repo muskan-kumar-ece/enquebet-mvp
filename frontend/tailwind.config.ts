@@ -20,9 +20,9 @@ const config: Config = {
                 'text-muted': '#6b7280',
                 'primary': '#38b6ff',
                 'primary-dark': '#0966c2',
-                'purple': '#8b5cf6',
-                'purple-light': '#a78bfa',
-                'purple-dark': '#7c3aed',
+                'brand-primary': '#1864ff',
+                'brand-light': '#4f8fff',
+                'brand-dark': '#0f4bcc',
             },
             fontFamily: {
                 sans: ['Source Sans Pro', 'Roboto', 'system-ui', 'sans-serif'],

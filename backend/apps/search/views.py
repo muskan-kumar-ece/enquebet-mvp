@@ -8,11 +8,11 @@ privacy and report moderation enforcement, zero N+1 queries, and pagination.
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Count, Subquery
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.posts.models import Post, PostReport
+from apps.posts.models import Post, PostReport, PostTag
 from apps.posts.serializers import PostSerializer
 from apps.posts.views import _annotate_user_interactions
 from apps.users.serializers import UserSerializer
@@ -45,6 +45,9 @@ class SearchView(APIView):
         college_filter = (request.query_params.get("college") or "").strip()
         skills_filter = (request.query_params.get("skills") or "").strip()
         role_filter = (request.query_params.get("role") or "").strip()
+        availability_filter = (request.query_params.get("availability") or "").strip().lower()
+        verified_only = request.query_params.get("verified_only", "").lower() in ("true", "1")
+        sort_by = (request.query_params.get("sort_by") or "reputation").strip().lower()
 
         # Parse pagination
         try:
@@ -60,11 +63,14 @@ class SearchView(APIView):
 
         # Return empty result set if neither query nor any filter is provided
         has_filter = any([
+            search_type in {"builders", "projects", "users", "posts"},
             category_filter and category_filter.lower() != "all",
             location_filter,
             college_filter,
             skills_filter,
-            role_filter
+            role_filter,
+            availability_filter,
+            verified_only,
         ])
         if not query and not has_filter:
             empty_pagination = {
@@ -115,11 +121,24 @@ class SearchView(APIView):
             if college_filter:
                 user_qs = user_qs.filter(college__icontains=college_filter)
 
-            user_qs = (
-                user_qs.distinct()
-                .prefetch_related("skills")
-                .order_by("-reputation_score", "-verification_level", "-created_at")
-            )
+            if availability_filter:
+                user_qs = user_qs.filter(availability_status__iexact=availability_filter)
+
+            if verified_only:
+                user_qs = user_qs.filter(verification_level__gt=0)
+
+            if sort_by == "newest":
+                user_qs = (
+                    user_qs.distinct()
+                    .prefetch_related("skills")
+                    .order_by("-created_at")
+                )
+            else:
+                user_qs = (
+                    user_qs.distinct()
+                    .prefetch_related("skills")
+                    .order_by("-reputation_score", "-verification_level", "-created_at")
+                )
 
         # -------------------------------------------------------------
         # 2. Projects Queryset
@@ -259,3 +278,58 @@ class SearchView(APIView):
             "projects": posts_data,
             "pagination": pagination,
         })
+
+
+class SearchSuggestionsView(APIView):
+    """Sub-15ms auto-complete suggestion endpoint.
+
+    Aggregates matching tags/skills, builder names/usernames, colleges, and categories.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        q = request.query_params.get("q", "").strip()
+        if not q or len(q) < 2:
+            return Response({"skills": [], "colleges": [], "categories": [], "builders": []})
+
+        skills = list(
+            PostTag.objects.filter(tag_name__icontains=q)
+            .values_list("tag_name", flat=True)
+            .distinct()[:5]
+        )
+
+        colleges = list(
+            User.objects.filter(college__icontains=q)
+            .exclude(college__isnull=True)
+            .exclude(college="")
+            .values_list("college", flat=True)
+            .distinct()[:5]
+        )
+
+        builders = list(
+            User.objects.filter(
+                Q(username__icontains=q) | Q(full_name__icontains=q)
+            ).values("id", "username", "full_name", "profile_image", "headline")[:5]
+        )
+
+        CATEGORIES = [
+            "AI / ML",
+            "Web Development",
+            "Mobile Apps",
+            "FinTech",
+            "EdTech",
+            "Hardware / IoT",
+            "Blockchain",
+            "Open Source",
+            "Design",
+        ]
+        matching_categories = [c for c in CATEGORIES if q.lower() in c.lower()][:4]
+
+        return Response({
+            "skills": skills,
+            "colleges": colleges,
+            "categories": matching_categories,
+            "builders": builders,
+        })
+

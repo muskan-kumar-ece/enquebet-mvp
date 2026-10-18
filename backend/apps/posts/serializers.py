@@ -5,6 +5,7 @@ import json
 from rest_framework import serializers
 from .models import Post, PostAttachment, PostRequirement, PostTag, Like, Comment
 from apps.users.serializers import UserSerializer
+from .services.geo_service import haversine_distance_km
 
 
 class FlexibleStringListField(serializers.ListField):
@@ -52,15 +53,38 @@ class PostSerializer(serializers.ModelSerializer):
     is_liked = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
     has_requested_collaboration = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
     
     class Meta:
         model = Post
         fields = [
             'id', 'user', 'title', 'description', 'category', 'view_type',
-            'location', 'college', 'attachments', 'requirements', 'tags',
-            'likes_count', 'comments_count', 'is_liked', 'is_saved', 'has_requested_collaboration', 'created_at'
+            'location', 'college', 'city', 'latitude', 'longitude', 'is_remote',
+            'attachments', 'requirements', 'tags',
+            'likes_count', 'comments_count', 'is_liked', 'is_saved', 'has_requested_collaboration',
+            'distance_km', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'distance_km']
+
+    def get_distance_km(self, obj):
+        if hasattr(obj, '_distance_km') and obj._distance_km is not None:
+            try:
+                return round(float(obj._distance_km), 1)
+            except (ValueError, TypeError):
+                pass
+        request = self.context.get('request')
+        if request and obj.latitude is not None and obj.longitude is not None:
+            ref_lat = request.query_params.get('lat')
+            ref_lng = request.query_params.get('lng')
+            if not ref_lat or not ref_lng:
+                if request.user.is_authenticated:
+                    ref_lat = getattr(request.user, 'latitude', None)
+                    ref_lng = getattr(request.user, 'longitude', None)
+            if ref_lat is not None and ref_lng is not None:
+                dist = haversine_distance_km(ref_lat, ref_lng, obj.latitude, obj.longitude)
+                if dist is not None:
+                    return round(dist, 1)
+        return None
     
     def get_likes_count(self, obj):
         # Prefer annotated value to avoid N+1 queries
@@ -111,7 +135,11 @@ class CreatePostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['title', 'description', 'category', 'view_type', 'location', 'college', 'requirements', 'tags', 'attachment_url']
+        fields = [
+            'title', 'description', 'category', 'view_type',
+            'location', 'college', 'city', 'latitude', 'longitude', 'is_remote',
+            'requirements', 'tags', 'attachment_url'
+        ]
 
     def create(self, validated_data):
         requirements = validated_data.pop('requirements', [])

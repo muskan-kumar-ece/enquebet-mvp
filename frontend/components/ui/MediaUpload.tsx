@@ -63,7 +63,7 @@ export default function MediaUpload({ files, onFilesChange, disabled = false }: 
                         if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
                     }}
                     disabled={disabled}
-                    className="w-full h-48 border-2 border-dashed border-border-default rounded-lg hover:border-purple transition-colors flex flex-col items-center justify-center gap-3 bg-bg-hover/50"
+                    className="w-full h-48 border-2 border-dashed border-border-default rounded-lg hover:border-brand-primary transition-colors flex flex-col items-center justify-center gap-3 bg-bg-hover/50"
                 >
                     <Upload className="w-8 h-8 text-text-secondary" />
                     <div className="text-center">
@@ -122,7 +122,7 @@ export default function MediaUpload({ files, onFilesChange, disabled = false }: 
                                 if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
                             }}
                             disabled={disabled}
-                            className="text-purple hover:text-purple-light text-sm"
+                            className="text-brand-light hover:underline text-sm font-medium"
                         >
                             + Add / replace media
                         </button>

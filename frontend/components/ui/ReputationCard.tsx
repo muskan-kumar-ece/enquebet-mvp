@@ -86,13 +86,13 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-border-default/60">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple/10 border border-purple/20 flex items-center justify-center text-purple-light shadow-inner">
-                        <Award className="w-5 h-5 text-purple" />
+                    <div className="w-10 h-10 rounded-xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-light shadow-inner">
+                        <Award className="w-5 h-5 text-brand-light" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
                             <h2 className="text-base font-bold text-text-primary">Verified Builder Reputation</h2>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple/10 text-purple-light border border-purple/20">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-brand-primary/10 text-brand-light border border-brand-primary/20">
                                 {level}
                             </span>
                         </div>
@@ -104,7 +104,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
 
                 <div className="flex items-center gap-3">
                     <div className="text-right">
-                        <div className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-light to-primary">
+                        <div className="text-2xl font-extrabold text-white">
                             {score}
                         </div>
                         <span className="text-[10px] uppercase tracking-wider font-semibold text-text-muted">
@@ -119,7 +119,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
                             title="Recalculate reputation from database ground-truth"
                             className="p-2 rounded-lg bg-bg-hover hover:bg-bg-card-elevated border border-border-default text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
                         >
-                            <RefreshCw className={`w-4 h-4 ${recalculating ? 'animate-spin text-purple' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${recalculating ? 'animate-spin text-brand-light' : ''}`} />
                         </button>
                     )}
                 </div>
@@ -127,7 +127,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
 
             {/* Recalculate Feedback Notification */}
             {message && (
-                <div className="my-3 p-2.5 rounded-lg bg-purple/10 border border-purple/30 text-xs text-purple-light flex items-center gap-2 animate-fadeIn">
+                <div className="my-3 p-2.5 rounded-lg bg-brand-primary/10 border border-brand-primary/30 text-xs text-brand-light flex items-center gap-2 animate-fadeIn">
                     <Info className="w-4 h-4 shrink-0" />
                     <span>{message}</span>
                 </div>
@@ -160,7 +160,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
                 <div className="p-3 rounded-xl bg-bg-card-elevated border border-border-default/60 flex flex-col justify-between">
                     <div className="flex items-center justify-between text-text-muted mb-1">
                         <span className="text-[11px] font-medium uppercase tracking-wider">Projects</span>
-                        <FolderCheck className="w-3.5 h-3.5 text-purple-light" />
+                        <FolderCheck className="w-3.5 h-3.5 text-brand-light" />
                     </div>
                     <div className="text-xl font-bold text-text-primary">
                         {stats.completed_projects_count ?? 0}
@@ -186,7 +186,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
             {/* Score Breakdown Pills */}
             <div className="pt-4 border-t border-border-default/60">
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-text-muted mb-2.5 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5 text-purple-light" />
+                    <TrendingUp className="w-3.5 h-3.5 text-brand-light" />
                     <span>Point Allocation Breakdown</span>
                 </div>
 
@@ -202,7 +202,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
                     </span>
 
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-bg-hover border border-border-default text-text-secondary">
-                        <span className="w-2 h-2 rounded-full bg-purple" />
+                        <span className="w-2 h-2 rounded-full bg-brand-primary" />
                         Proof of Work: <strong className="text-text-primary">+{breakdown.projects_points ?? 0}</strong>
                     </span>
 
@@ -230,7 +230,7 @@ export function ReputationCard({ userId, isOwner = false, initialScore = 0 }: Re
                                 <span className="text-text-secondary truncate pr-2">
                                     {ev.description}
                                 </span>
-                                <span className="font-semibold text-purple-light shrink-0">
+                                <span className="font-semibold text-brand-light shrink-0">
                                     +{ev.points} pts
                                 </span>
                             </div>

@@ -4,7 +4,7 @@ User Serializers for Authentication and Profiles
 import json
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UserSkill, Follower
+from .models import UserSkill, Follower, UserExperience, UserEducation, UserSession, BlockedUser
 
 User = get_user_model()
 
@@ -80,8 +80,11 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'full_name', 'headline', 'bio',
             'profile_image', 'avatar_url', 'cover_image', 'location', 'college',
+            'city', 'latitude', 'longitude', 'campus_domain',
             'is_private', 'is_private_locked',
             'verification_level', 'reputation_score', 'reputation_tier', 'completeness_score',
+            'availability_status', 'pinned_proof_ids',
+            'daily_focus_limit_minutes', 'quiet_hours_enabled', 'quiet_hours_start', 'quiet_hours_end', 'weekly_digest_enabled',
             'skills', 'skills_detailed', 'followers_count', 'following_count',
             'education', 'projects', 'experience',
             'resume_file', 'linkedin_url', 'github_url', 'portfolio_url',
@@ -252,3 +255,110 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
+
+class UserExperienceSerializer(serializers.ModelSerializer):
+    """Serializer for builder work and venture experience."""
+    verified_pow_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserExperience
+        fields = [
+            'id', 'company_name', 'role_title', 'location', 'is_remote',
+            'start_date', 'end_date', 'is_current', 'description',
+            'skills_used', 'verified_pow', 'verified_pow_code',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'verified_pow_code']
+
+    def get_verified_pow_code(self, obj):
+        if obj.verified_pow:
+            return obj.verified_pow.verification_code
+        return None
+
+
+class UserEducationSerializer(serializers.ModelSerializer):
+    """Serializer for academic credentials and campus verification."""
+    class Meta:
+        model = UserEducation
+        fields = [
+            'id', 'institution', 'degree', 'field_of_study',
+            'start_year', 'end_year', 'is_campus_verified', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class PinnedProofSerializer(serializers.Serializer):
+    """Serializer for pinned Proof of Work cards on builder profiles."""
+    id = serializers.UUIDField()
+    verification_code = serializers.CharField()
+    summary = serializers.CharField()
+    content_hash = serializers.CharField()
+    minted_at = serializers.DateTimeField()
+    workspace_id = serializers.UUIDField(source='workspace.id')
+    project_title = serializers.CharField(source='workspace.post.title')
+    project_caption = serializers.CharField(source='workspace.post.caption', required=False, allow_blank=True)
+    contributors = serializers.SerializerMethodField()
+    deliverables_count = serializers.SerializerMethodField()
+    tasks_count = serializers.SerializerMethodField()
+
+    def get_contributors(self, obj):
+        return obj.metadata_snapshot.get('contributors', [])
+
+    def get_deliverables_count(self, obj):
+        return obj.metadata_snapshot.get('deliverables_count', 0)
+
+    def get_tasks_count(self, obj):
+        return obj.metadata_snapshot.get('tasks_count', 0)
+
+
+class DossierPeerReviewSerializer(serializers.Serializer):
+    """Serializer for verified teammate testimonials on the builder dossier."""
+    id = serializers.UUIDField()
+    reviewer_id = serializers.UUIDField(source='reviewer.id')
+    reviewer_name = serializers.CharField(source='reviewer.full_name')
+    reviewer_username = serializers.CharField(source='reviewer.username')
+    reviewer_avatar = serializers.URLField(source='reviewer.profile_image', allow_blank=True, required=False)
+    reviewer_tier = serializers.SerializerMethodField()
+    project_title = serializers.CharField(source='proof.workspace.post.title')
+    proof_code = serializers.CharField(source='proof.verification_code')
+    execution_score = serializers.IntegerField()
+    collaboration_score = serializers.IntegerField()
+    reliability_score = serializers.IntegerField()
+    average_score = serializers.SerializerMethodField()
+    feedback = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+    def get_reviewer_tier(self, obj):
+        from apps.collaboration.reputation_service import get_builder_level
+        return get_builder_level(obj.reviewer.reputation_score)['title']
+
+    def get_average_score(self, obj):
+        return round((obj.execution_score + obj.collaboration_score + obj.reliability_score) / 3.0, 1)
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSession
+        fields = [
+            'id', 'device_name', 'device_type', 'browser', 'os',
+            'ip_address', 'location_city', 'last_active', 'created_at',
+            'is_current', 'revoked'
+        ]
+        read_only_fields = fields
+
+
+class BlockedUserSerializer(serializers.ModelSerializer):
+    blocked_user_id = serializers.UUIDField(source='blocked_user.id', read_only=True)
+    blocked_username = serializers.CharField(source='blocked_user.username', read_only=True)
+    blocked_full_name = serializers.CharField(source='blocked_user.full_name', read_only=True)
+    blocked_avatar = serializers.URLField(source='blocked_user.profile_image', read_only=True)
+
+    class Meta:
+        model = BlockedUser
+        fields = [
+            'id', 'blocked_user_id', 'blocked_username', 'blocked_full_name',
+            'blocked_avatar', 'reason', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+

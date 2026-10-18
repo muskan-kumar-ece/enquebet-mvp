@@ -19,10 +19,16 @@ class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
+    project_title = serializers.SerializerMethodField()
+    workspace_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = ['id', 'name', 'is_group', 'members', 'member_count', 'unread_count', 'last_message', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'is_group', 'project_id', 'project_title', 
+            'workspace_id', 'members', 'member_count', 'unread_count', 
+            'last_message', 'created_at', 'updated_at'
+        ]
 
     def get_members(self, obj):
         member_objs = obj.members.select_related('user').all()[:10]
@@ -30,6 +36,20 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_member_count(self, obj):
         return obj.members.count()
+
+    def get_project_title(self, obj):
+        if not obj.project_id:
+            return None
+        from apps.posts.models import Post
+        post = Post.objects.filter(id=obj.project_id).only('title').first()
+        return post.title if post else None
+
+    def get_workspace_id(self, obj):
+        if not obj.project_id:
+            return None
+        from apps.collaboration.models import Workspace
+        ws = Workspace.objects.filter(post_id=obj.project_id).only('id').first()
+        return str(ws.id) if ws else None
 
     def get_last_message(self, obj):
         # Use prefetched _last_message if available, otherwise query
@@ -66,8 +86,15 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)
+    is_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'sender', 'content', 'attachment_url', 'created_at']
+        fields = ['id', 'sender', 'content', 'attachment_url', 'is_me', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+    def get_is_me(self, obj):
+        request = self.context.get('request')
+        if not request or not getattr(request, 'user', None):
+            return False
+        return obj.sender_id == request.user.id

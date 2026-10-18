@@ -1,0 +1,223 @@
+"use client";
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, CheckCheck, Copy, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+interface MessageStreamProps {
+    messages: any[];
+    currentUserId?: string;
+    isTyping?: boolean;
+    typingUsername?: string;
+}
+
+export function MessageStream({
+    messages,
+    currentUserId,
+    isTyping = false,
+    typingUsername,
+}: MessageStreamProps) {
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+    // Auto-scroll on new message
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, isTyping]);
+
+    const handleCopyCode = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Snippet copied to clipboard');
+    };
+
+    // Group messages by date
+    const formatDateDivider = (isoString: string) => {
+        const date = new Date(isoString);
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+
+        if (date.toDateString() === today.toDateString()) return 'Today';
+        if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    // Parse simple code blocks in content: ```code```
+    const renderMessageContent = (content: string) => {
+        if (!content) return null;
+
+        // Check if content contains code block
+        const codeBlockRegex = /```([\s\S]*?)```/g;
+        if (codeBlockRegex.test(content)) {
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+            const regex = /```([\s\S]*?)```/g;
+
+            while ((match = regex.exec(content)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(
+                        <span key={lastIndex} className="whitespace-pre-wrap">
+                            {content.substring(lastIndex, match.index)}
+                        </span>
+                    );
+                }
+                const codeSnippet = match[1];
+                parts.push(
+                    <div key={match.index} className="my-2 p-2.5 rounded-lg bg-[#0b0d14] border border-[#1e2335] font-mono text-xs text-brand-light relative group overflow-x-auto">
+                        <button
+                            type="button"
+                            onClick={() => handleCopyCode(codeSnippet)}
+                            className="absolute top-2 right-2 p-1 rounded bg-zinc-800/80 text-zinc-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Copy code"
+                        >
+                            <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <pre className="text-xs leading-relaxed">{codeSnippet}</pre>
+                    </div>
+                );
+                lastIndex = match.index + match[0].length;
+            }
+
+            if (lastIndex < content.length) {
+                parts.push(
+                    <span key={lastIndex} className="whitespace-pre-wrap">
+                        {content.substring(lastIndex)}
+                    </span>
+                );
+            }
+            return parts;
+        }
+
+        return <span className="whitespace-pre-wrap leading-relaxed">{content}</span>;
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-[#080810]">
+            {messages.map((msg, index) => {
+                const isMe = msg.is_me || msg.sender?.id === currentUserId;
+                const prevMsg = messages[index - 1];
+                const showDateDivider =
+                    !prevMsg ||
+                    new Date(prevMsg.created_at).toDateString() !== new Date(msg.created_at).toDateString();
+
+                const senderName = msg.sender?.full_name || msg.sender?.username || 'Builder';
+                const senderInitial = senderName.slice(0, 2).toUpperCase();
+
+                return (
+                    <React.Fragment key={msg.id || index}>
+                        {/* Date Divider */}
+                        {showDateDivider && (
+                            <div className="flex items-center justify-center my-6">
+                                <div className="h-px bg-[#1a1a2e] flex-1" />
+                                <span className="px-3 py-1 text-[11px] font-mono text-zinc-400 bg-[#10101c] border border-[#1e1e34] rounded-full mx-4 shadow-sm">
+                                    {formatDateDivider(msg.created_at)}
+                                </span>
+                                <div className="h-px bg-[#1a1a2e] flex-1" />
+                            </div>
+                        )}
+
+                        {/* Message Bubble Row */}
+                        <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`flex items-end gap-2.5 max-w-[85%] sm:max-w-[70%] md:max-w-[60%] ${isMe ? 'flex-row-reverse' : ''}`}>
+                                {/* Counterparty Avatar */}
+                                {!isMe && (
+                                    <div className="w-7 h-7 rounded-full bg-[#14192b] border border-brand/20 text-brand-light text-[11px] font-bold flex items-center justify-center shrink-0 mb-1">
+                                        {msg.sender?.profile_image ? (
+                                            <img
+                                                src={msg.sender.profile_image}
+                                                alt={senderName}
+                                                className="w-full h-full rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            senderInitial
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Message Content Container */}
+                                <div className="space-y-1">
+                                    {/* Sender Name in group chats */}
+                                    {!isMe && (
+                                        <p className="text-[11px] font-medium text-zinc-400 ml-1">
+                                            {senderName}
+                                        </p>
+                                    )}
+
+                                    {/* Main Bubble */}
+                                    <div
+                                        className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md transition-all ${
+                                            isMe
+                                                ? 'bg-brand text-white rounded-br-sm border border-brand/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]'
+                                                : 'bg-[#0f111a] border border-[#1e2335] text-zinc-200 rounded-bl-sm'
+                                        }`}
+                                    >
+                                        {/* Attachment Image Preview */}
+                                        {msg.attachment_url && (
+                                            <div className="mb-2 rounded-xl overflow-hidden border border-black/20 max-w-sm">
+                                                <img
+                                                    src={msg.attachment_url}
+                                                    alt="Attachment"
+                                                    className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity"
+                                                    onClick={() => setSelectedImage(msg.attachment_url)}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {renderMessageContent(msg.content)}
+                                    </div>
+
+                                    {/* Timestamp & Read Receipt */}
+                                    <div className={`flex items-center gap-1 text-[10px] text-zinc-400 ${isMe ? 'justify-end mr-1' : 'ml-1'}`}>
+                                        <span>
+                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                        {isMe && (
+                                            <span title="Delivered">
+                                                <CheckCheck className="w-3.5 h-3.5 text-brand" />
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </React.Fragment>
+                );
+            })}
+
+            {/* Typing Indicator Bubble */}
+            {isTyping && (
+                <div className="flex items-end gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs flex items-center justify-center font-bold">
+                        ...
+                    </div>
+                    <div className="bg-[#0f111a] border border-[#1e2335] rounded-xl rounded-bl-sm px-3.5 py-2.5 shadow-sm">
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div ref={bottomRef} />
+
+            {/* Image Modal Lightbox */}
+            {selectedImage && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setSelectedImage(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh]">
+                        <img
+                            src={selectedImage}
+                            alt="Full preview"
+                            className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-zinc-800"
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

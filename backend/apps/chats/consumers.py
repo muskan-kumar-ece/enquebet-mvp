@@ -57,15 +57,47 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
     async def receive(self, text_data):
-        """Handle incoming message from client."""
+        """Handle incoming message or typing/read events from client."""
         try:
             data = json.loads(text_data)
+            event_type = data.get('type')
+
+            # 1. Typing indicator event
+            if event_type == 'typing':
+                is_typing = bool(data.get('is_typing', True))
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        'type': 'chat_typing',
+                        'user_id': str(self.user.id),
+                        'username': self.user.username,
+                        'is_typing': is_typing,
+                    }
+                )
+                return
+
+            # 2. Read receipt event
+            if event_type == 'read':
+                read_at = await self._mark_read()
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        'type': 'chat_read',
+                        'user_id': str(self.user.id),
+                        'username': self.user.username,
+                        'read_at': read_at,
+                    }
+                )
+                return
+
+            # 3. Standard chat message event
             content = data.get('content', '').strip()
-            if not content:
+            attachment_url = (data.get('attachment_url') or '').strip()
+            if not content and not attachment_url:
                 return
 
             # Save message to DB and broadcast to group
-            message = await self._save_message(content)
+            message = await self._save_message(content, attachment_url)
             if message:
                 await self.channel_layer.group_send(
                     self.group_name,
@@ -82,6 +114,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
             'message': event['message'],
+        }))
+
+    async def chat_typing(self, event):
+        """Broadcast typing status to group."""
+        await self.send(text_data=json.dumps({
+            'type': 'chat_typing',
+            'user_id': event['user_id'],
+            'username': event['username'],
+            'is_typing': event['is_typing'],
+        }))
+
+    async def chat_read(self, event):
+        """Broadcast read receipt to group."""
+        await self.send(text_data=json.dumps({
+            'type': 'chat_read',
+            'user_id': event['user_id'],
+            'username': event['username'],
+            'read_at': event['read_at'],
         }))
 
     # --- Helpers ---
@@ -112,7 +162,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return False
 
     @database_sync_to_async
-    def _save_message(self, content):
+    def _mark_read(self):
+        try:
+            from apps.chats.models import ConversationMember
+            now = timezone.now()
+            ConversationMember.objects.filter(
+                conversation_id=self.conversation_id,
+                user=self.user
+            ).update(last_read_at=now)
+            return now.isoformat()
+        except Exception:
+            return timezone.now().isoformat()
+
+    @database_sync_to_async
+    def _save_message(self, content, attachment_url=''):
         try:
             from apps.chats.models import Conversation, ConversationMember, Message
             from apps.notifications.models import Notification
@@ -123,6 +186,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 conversation=conversation,
                 sender=self.user,
                 content=content,
+                attachment_url=attachment_url,
             )
 
             ConversationMember.objects.filter(
@@ -147,6 +211,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return {
                 'id': str(message.id),
                 'content': message.content,
+                'attachment_url': message.attachment_url or '',
                 'created_at': message.created_at.isoformat(),
                 'sender': {
                     'id': str(self.user.id),

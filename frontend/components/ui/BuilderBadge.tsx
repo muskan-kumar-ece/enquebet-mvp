@@ -23,10 +23,10 @@ export function VerificationBadge({ level = 0, showTooltip = true }: Verificatio
     if (level === 2) {
         return (
             <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple/15 text-purple-light text-xs font-semibold border border-purple/30"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-primary/15 text-brand-light text-xs font-semibold border border-brand-primary/30"
                 title={showTooltip ? "Verified Builder: Proven track record of completed projects and Proof of Work." : undefined}
             >
-                <ShieldCheck className="w-3.5 h-3.5 text-purple-light" />
+                <ShieldCheck className="w-3.5 h-3.5 text-brand-light" />
                 <span>Verified Builder</span>
             </div>
         );
@@ -63,10 +63,10 @@ interface ReputationBadgeProps {
 export function ReputationBadge({ score = 0 }: ReputationBadgeProps) {
     return (
         <div
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple/10 text-purple-light text-xs font-semibold border border-purple/20"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-primary/10 text-brand-light text-xs font-semibold border border-brand-primary/20"
             title="Reputation points are awarded through peer reviews, delivered projects, and accepted Proof of Work."
         >
-            <Sparkles className="w-3.5 h-3.5 text-purple" />
+            <Sparkles className="w-3.5 h-3.5 text-brand-light" />
             <span>{score} Reputation</span>
         </div>
     );

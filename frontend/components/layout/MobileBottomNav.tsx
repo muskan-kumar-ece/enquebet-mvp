@@ -31,14 +31,14 @@ export default function MobileBottomNav() {
                             href={item.href}
                             className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
                                 isActive
-                                    ? 'text-purple'
+                                    ? 'text-brand-light font-semibold'
                                     : 'text-text-muted hover:text-text-primary'
                             }`}
                         >
                             <span className="relative">
                                 <Icon className="w-5 h-5" />
                                 {item.href === '/notifications' && unreadCount > 0 && (
-                                    <span className="absolute -top-1 -right-1.5 bg-purple text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                                    <span className="absolute -top-1 -right-1.5 bg-brand-primary text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
                                 )}

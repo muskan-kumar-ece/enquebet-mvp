@@ -32,8 +32,20 @@ yarn-error.log*
 
 # env files (allow tracking of .env.example)
 .env*
+.env.local
+.env.*.local
+*.local
 !.env.example
 !*.env.example
+
+# secrets & keys
+*.pem
+*.key
+*.cert
+*.crt
+credentials*.json
+serviceAccount*.json
+secrets/
 
 # vercel
 .vercel

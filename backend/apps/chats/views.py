@@ -3,7 +3,7 @@ Messages Views
 """
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework import generics, status
@@ -49,6 +49,23 @@ class ConversationListCreateView(generics.ListCreateAPIView):
         ).distinct().prefetch_related(
             Prefetch('members', queryset=ConversationMember.objects.select_related('user')),
         ).order_by('-updated_at')
+
+        # Filter by conversation type
+        convo_type = (self.request.query_params.get('type') or '').lower()
+        if convo_type == 'dms':
+            qs = qs.filter(is_group=False)
+        elif convo_type == 'groups':
+            qs = qs.filter(is_group=True)
+
+        # Filter by search term
+        q = (self.request.query_params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) |
+                Q(members__user__username__icontains=q) |
+                Q(members__user__full_name__icontains=q)
+            ).distinct()
+
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -149,9 +166,14 @@ class ConversationMessagesView(generics.ListCreateAPIView):
     def get_queryset(self):
         conversation = self._get_conversation_for_user()
         conversation_id = conversation.id
-        return Message.objects.filter(
+        qs = Message.objects.filter(
             conversation_id=conversation_id
         ).select_related('sender')
+
+        q = (self.request.query_params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(content__icontains=q)
+        return qs
 
     def list(self, request, *args, **kwargs):
         conversation = self._get_conversation_for_user()

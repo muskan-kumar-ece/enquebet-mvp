@@ -109,12 +109,18 @@ class WorkspaceDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'post', 'progress_percentage', 'completed_at', 'created_at', 'updated_at']
 
     def get_active_members_count(self, obj):
+        if hasattr(obj, 'annotated_active_members') and obj.annotated_active_members is not None:
+            return obj.annotated_active_members
         return obj.memberships.filter(status='active').count()
 
     def get_tasks_count(self, obj):
+        if hasattr(obj, 'annotated_tasks_count') and obj.annotated_tasks_count is not None:
+            return obj.annotated_tasks_count
         return obj.tasks.exclude(status='cancelled').count()
 
     def get_completed_tasks_count(self, obj):
+        if hasattr(obj, 'annotated_completed_tasks') and obj.annotated_completed_tasks is not None:
+            return obj.annotated_completed_tasks
         return obj.tasks.filter(status='completed').count()
 
     def get_current_user_role(self, obj):

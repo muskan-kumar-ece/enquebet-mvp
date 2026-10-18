@@ -19,7 +19,11 @@ interface User {
     is_private_locked?: boolean;
     bio?: string;
     location?: string;
+    city?: string;
     college?: string;
+    campus_domain?: string;
+    availability_status?: string;
+    pinned_proof_ids?: string[];
     profile_image?: string;
     avatar_url?: string;
     skills?: string[];

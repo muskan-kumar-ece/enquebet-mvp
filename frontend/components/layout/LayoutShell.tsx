@@ -16,20 +16,25 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         return <>{children}</>;
     }
 
+    // RightPanel is strictly reserved for the Home social feed
+    const showRightPanel = pathname === '/';
+
     return (
         <div className="flex min-h-screen">
             {/* Left Sidebar */}
             <Sidebar />
 
-            {/* Main Content — responsive margins */}
-            <main className="flex-1 pt-14 pb-16 lg:pt-0 lg:pb-0 lg:ml-64 xl:mr-80">
+            {/* Main Content — responsive margins; right margin only on Home feed */}
+            <main className={`flex-1 min-w-0 pt-14 pb-16 lg:pt-0 lg:pb-0 lg:ml-64 ${showRightPanel ? 'xl:mr-80' : ''}`}>
                 {children}
             </main>
 
-            {/* Right Panel — hidden on smaller screens */}
-            <div className="hidden xl:block">
-                <RightPanel />
-            </div>
+            {/* Right Panel — rendered ONLY on Home page */}
+            {showRightPanel && (
+                <div className="hidden xl:block">
+                    <RightPanel />
+                </div>
+            )}
 
             {/* Mobile Bottom Navigation */}
             <MobileBottomNav />

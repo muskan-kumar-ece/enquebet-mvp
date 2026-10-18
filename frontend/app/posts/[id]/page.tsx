@@ -161,7 +161,7 @@ export default function PostDetailPage() {
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
                             <div
-                                className="w-11 h-11 rounded-full bg-gradient-to-br from-purple to-purple-dark shrink-0 flex items-center justify-center cursor-pointer shadow-md shadow-purple/20 ring-2 ring-purple/20"
+                                className="w-11 h-11 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark shrink-0 flex items-center justify-center cursor-pointer ring-2 ring-brand-primary/20 shadow-md"
                                 onClick={() => router.push(`/profile/${post.user?.id}`)}
                             >
                                 {post.user?.avatar_url ? (
@@ -174,7 +174,7 @@ export default function PostDetailPage() {
                             </div>
                             <div>
                                 <h3
-                                    className="font-semibold cursor-pointer hover:text-purple transition-colors"
+                                    className="font-bold text-text-primary cursor-pointer hover:text-brand-light transition-colors"
                                     onClick={() => router.push(`/profile/${post.user?.id}`)}
                                 >
                                     {post.user?.full_name || post.user?.username || 'Anonymous'}
@@ -190,7 +190,7 @@ export default function PostDetailPage() {
                             <button
                                 onClick={handleMessage}
                                 disabled={sendingMessage}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-hover border border-border-default hover:border-purple text-text-secondary hover:text-purple transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-hover border border-border-default hover:border-brand-primary text-text-secondary hover:text-brand-light transition-all"
                             >
                                 <MessageSquare className="w-4 h-4" />
                                 <span className="text-sm font-medium">
@@ -233,13 +233,13 @@ export default function PostDetailPage() {
                     {post.requirements && post.requirements.length > 0 && (
                         <div className="mb-6 p-4 rounded-xl bg-bg-hover border border-border-default">
                             <h3 className="font-semibold mb-3 flex items-center gap-2">
-                                <Users className="w-4 h-4 text-purple" />
+                                <Users className="w-4 h-4 text-brand-light" />
                                 Looking for:
                             </h3>
                             <ul className="space-y-2">
                                 {post.requirements.map((req: any, i: number) => (
                                     <li key={i} className="flex items-center gap-2 text-text-secondary">
-                                        <span className="w-2 h-2 rounded-full bg-purple shrink-0" />
+                                        <span className="w-2 h-2 rounded-full bg-brand-primary shrink-0" />
                                         <span>{typeof req === 'string' ? req : req.role_name}</span>
                                     </li>
                                 ))}
@@ -251,7 +251,7 @@ export default function PostDetailPage() {
                     {post.tags && post.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-6">
                             {post.tags.map((tag: any, i: number) => (
-                                <span key={i} className="pill-purple">#{typeof tag === 'string' ? tag : tag.tag_name}</span>
+                                <span key={i} className="pill-brand">#{typeof tag === 'string' ? tag : tag.tag_name}</span>
                             ))}
                         </div>
                     )}
@@ -261,7 +261,7 @@ export default function PostDetailPage() {
                         {/* Like */}
                         <button
                             onClick={handleLike}
-                            className={`flex items-center gap-2 transition-colors ${isLiked ? 'text-purple' : 'text-text-secondary hover:text-purple'}`}
+                            className={`flex items-center gap-2 transition-colors ${isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-500'}`}
                         >
                             <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
                             <span>{likesCount}</span>
@@ -287,7 +287,7 @@ export default function PostDetailPage() {
                             href={`/workspace/${post.id}`}
                             className="btn-secondary text-xs flex items-center gap-1.5 ml-auto py-1.5 px-3"
                         >
-                            <Kanban className="w-3.5 h-3.5 text-purple" />
+                            <Kanban className="w-3.5 h-3.5 text-brand-light" />
                             <span>Workspace</span>
                         </Link>
 
@@ -297,8 +297,8 @@ export default function PostDetailPage() {
                                 onClick={handleCollabRequest}
                                 disabled={sendingRequest || post.has_requested_collaboration}
                                 className={`flex items-center gap-2 transition-colors font-medium ${post.has_requested_collaboration
-                                    ? 'text-green-500 cursor-default'
-                                    : 'text-purple hover:text-purple-light'
+                                    ? 'text-emerald-400 cursor-default'
+                                    : 'text-brand-light hover:text-white'
                                     }`}
                             >
                                 {post.has_requested_collaboration ? (
@@ -309,7 +309,7 @@ export default function PostDetailPage() {
                                 ) : (
                                     <>
                                         <Users className="w-5 h-5" />
-                                        <span>{sendingRequest ? 'Sending...' : '✨ Build With'}</span>
+                                        <span>{sendingRequest ? 'Sending...' : 'Build With'}</span>
                                     </>
                                 )}
                             </button>
@@ -324,7 +324,7 @@ export default function PostDetailPage() {
                     {/* Add Comment */}
                     <form onSubmit={handleAddComment} className="mb-6">
                         <div className="flex gap-3">
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple to-purple-dark shrink-0 flex items-center justify-center font-bold text-sm text-white">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark ring-1 ring-white/10 shrink-0 flex items-center justify-center font-bold text-sm text-white">
                                 {(user?.full_name || user?.username || 'U')[0].toUpperCase()}
                             </div>
                             <div className="flex-1 flex gap-2">
@@ -352,7 +352,7 @@ export default function PostDetailPage() {
                     <div className="space-y-4">
                         {comments.map((comment) => (
                             <div key={comment.id} className="flex gap-3">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple/80 to-purple-dark/80 shrink-0 flex items-center justify-center font-bold text-sm text-white">
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark ring-1 ring-white/10 shrink-0 flex items-center justify-center font-bold text-sm text-white">
                                     {(comment.user?.full_name || comment.user?.username || 'A')[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1">

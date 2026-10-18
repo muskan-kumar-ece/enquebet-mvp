@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import PostCreationBox from '@/components/feed/PostCreationBox';
 import FeedTabs from '@/components/feed/FeedTabs';
 import PostCard from '@/components/feed/PostCard';
 import { api } from '@/lib/api';
+import { getUserCoordinates, GeoCoordinates } from '@/lib/geo';
 import { FeedSkeleton } from '@/components/ui/skeletons';
-import { Users, GraduationCap, Sparkles, Globe, Lightbulb } from 'lucide-react';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { Users, GraduationCap, Sparkles, Globe, Lightbulb, MapPin, RefreshCw } from 'lucide-react';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -19,8 +21,9 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [coords, setCoords] = useState<GeoCoordinates | null>(null);
 
-  const fetchPosts = async (tab: string, page = 1, append = false) => {
+  const fetchPosts = useCallback(async (tab: string, page = 1, append = false, overrideCoords?: GeoCoordinates | null) => {
     if (append) {
       setLoadingMore(true);
     } else {
@@ -30,14 +33,19 @@ export default function HomePage() {
     setError('');
 
     try {
+      const activeCoords = overrideCoords !== undefined ? overrideCoords : coords;
+      const geoParams = activeCoords
+        ? { lat: activeCoords.latitude, lng: activeCoords.longitude }
+        : {};
+
       let response: any;
       if (tab === 'for_you') {
-        response = await api.getPosts({ mode: 'for_you', page });
+        response = await api.getPosts({ mode: 'for_you', page, ...geoParams });
       } else if (tab === 'following') {
-        response = await api.getPosts({ mode: 'following', page });
+        response = await api.getPosts({ mode: 'following', page, ...geoParams });
       } else {
         // Legacy view_types: public, college, openidea
-        response = await api.getPosts({ view_type: tab, page });
+        response = await api.getPosts({ view_type: tab, page, ...geoParams });
       }
 
       const incomingItems = response.results || (Array.isArray(response) ? response : []);
@@ -65,13 +73,22 @@ export default function HomePage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [coords]);
+
+  // Try to load cached or coarse coordinates on mount
+  useEffect(() => {
+    getUserCoordinates().then((c) => {
+      if (c) {
+        setCoords(c);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!authLoading && user) {
       fetchPosts(activeTab, 1, false);
     }
-  }, [activeTab, authLoading, user]);
+  }, [activeTab, authLoading, user, fetchPosts]);
 
   const handleTabChange = (tab: string) => {
     if (tab === activeTab) return;
@@ -99,7 +116,7 @@ export default function HomePage() {
     if (activeTab === 'following') {
       return (
         <div className="card text-center py-12 px-6 mt-4 border border-border-default">
-          <div className="w-12 h-12 rounded-full bg-purple/10 border border-purple/20 flex items-center justify-center mx-auto mb-3 text-purple-light">
+          <div className="w-12 h-12 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center mx-auto mb-3 text-brand-light">
             <Users className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold text-text-primary mb-1">Your Following Feed is Empty</h3>
@@ -149,7 +166,7 @@ export default function HomePage() {
     if (activeTab === 'for_you') {
       return (
         <div className="card text-center py-12 px-6 mt-4 border border-border-default">
-          <div className="w-12 h-12 rounded-full bg-purple/10 border border-purple/20 flex items-center justify-center mx-auto mb-3 text-purple-light">
+          <div className="w-12 h-12 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center mx-auto mb-3 text-brand-light">
             <Sparkles className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold text-text-primary mb-1">No Recommended Projects Yet</h3>
@@ -176,13 +193,79 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex flex-col w-full min-h-screen p-4 sm:p-6 pb-24">
+    <div className="flex flex-col w-full min-h-screen p-4 sm:p-6 pb-24 bg-blueprint-grid">
+      {/* Platform Brand Dock */}
+      <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
+        <div className="flex items-center gap-3">
+          <BrandLogo size="sm" mode="vector" withText={true} />
+          <span className="hidden sm:inline-block px-2.5 py-0.5 text-[10px] font-mono uppercase tracking-wider text-zinc-400 bg-white/[0.04] border border-white/[0.08] rounded-full">
+            Mainnet Feed
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {coords ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#121522] border border-[#23283c] text-zinc-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{coords.city || 'Nearby Active'}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono text-zinc-400 bg-white/[0.03] border border-white/[0.06]">
+              Discovery Protocol
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Post Creation Box */}
       <PostCreationBox onPostCreated={handlePostCreated} />
 
       {/* Sticky Feed Tabs */}
-      <div className="sticky top-14 lg:top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[#0b0b10]/80 backdrop-blur-md border-b border-[#252533] py-2">
+      <div className="sticky top-14 lg:top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-[#090a0f]/90 backdrop-blur-md border-b border-[#1b2030] py-2 mt-4">
         <FeedTabs activeTab={activeTab} onTabChange={handleTabChange} />
+
+        {/* Location Status Banner */}
+        {coords ? (
+          <div className="flex items-center justify-between text-xs text-zinc-400 px-3 py-2 mt-2.5 bg-[#0f111a] border border-[#1e2335] rounded-xl shadow-sm">
+            <div className="flex items-center gap-2 text-zinc-300 truncate">
+              <span className="w-2 h-2 rounded-full bg-[#1864ff] shrink-0 animate-pulse" />
+              <span className="truncate text-xs">
+                Local telemetry active · Projects near <strong className="text-white font-semibold">{coords.city || `${coords.latitude}, ${coords.longitude}`}</strong>
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                const updated = await getUserCoordinates({ forceRefresh: true });
+                if (updated) {
+                  setCoords(updated);
+                  fetchPosts(activeTab, 1, false, updated);
+                }
+              }}
+              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors px-2.5 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-zinc-800 shrink-0 ml-2 font-mono"
+              title="Refresh GPS Location"
+            >
+              <RefreshCw className="w-3 h-3" /> Sync
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-xs px-3 py-2 mt-2.5 bg-[#0f111a] border border-[#1e2335] rounded-xl shadow-sm">
+            <div className="flex items-center gap-2 text-zinc-300 truncate">
+              <MapPin className="w-3.5 h-3.5 text-[#4f8fff] shrink-0" />
+              <span className="truncate text-xs">Prioritize collegiate & regional builder ventures</span>
+            </div>
+            <button
+              onClick={async () => {
+                const resolved = await getUserCoordinates({ forceRefresh: true });
+                if (resolved) {
+                  setCoords(resolved);
+                  fetchPosts(activeTab, 1, false, resolved);
+                }
+              }}
+              className="btn-primary text-[11px] px-3 py-1 shrink-0 font-medium ml-2"
+            >
+              Detect Location
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Posts Feed */}
@@ -223,6 +306,12 @@ export default function HomePage() {
                 is_liked={post.is_liked || false}
                 is_saved={post.is_saved || false}
                 image={imageUrl}
+                city={post.city}
+                distance_km={post.distance_km}
+                is_remote={post.is_remote}
+                view_type={post.view_type}
+                college={post.college}
+                category={post.category}
                 onRefresh={() => fetchPosts(activeTab, currentPage, false)}
               />
             );

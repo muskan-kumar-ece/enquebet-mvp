@@ -21,6 +21,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Post, Like, Comment, SavedPost, PostCollaborator, PostReport, PostAttachment, PostTag, PostRequirement
 from .serializers import PostSerializer, CreatePostSerializer, CommentSerializer
+from .services.geo_service import annotate_distance, build_ripple_score_expression
 
 
 class IsPostOwnerOrReadOnly(BasePermission):
@@ -195,26 +196,52 @@ class FeedView(generics.ListAPIView):
         qs = _annotate_user_interactions(qs, user)
         return qs.order_by('-created_at', '-id')
 
-    def _build_for_you_queryset(self, queryset, user, category, location):
-        """Personalized Discovery Algorithm (For You feed)."""
+    def _resolve_coordinates(self):
+        user = self.request.user
+        lat = self.request.query_params.get('lat')
+        lng = self.request.query_params.get('lng')
+        if lat is not None and lng is not None:
+            try:
+                lat_f = float(lat)
+                lng_f = float(lng)
+                if -90.0 <= lat_f <= 90.0 and -180.0 <= lng_f <= 180.0:
+                    return lat_f, lng_f
+            except (ValueError, TypeError):
+                pass
+        if user and user.is_authenticated:
+            u_lat = getattr(user, 'latitude', None)
+            u_lng = getattr(user, 'longitude', None)
+            if u_lat is not None and u_lng is not None:
+                try:
+                    lat_f = float(u_lat)
+                    lng_f = float(u_lng)
+                    if -90.0 <= lat_f <= 90.0 and -180.0 <= lng_f <= 180.0:
+                        return lat_f, lng_f
+                except (ValueError, TypeError):
+                    pass
+        return None, None
+
+    def _build_for_you_queryset(self, queryset, user, category, location, ref_lat=None, ref_lng=None):
+        """Personalized Discovery Algorithm (For You feed) with Geo-Ripple Expansion."""
         from apps.users.models import UserSkill
 
         # For You includes public posts, open ideas, and college posts if user matches college
         view_type_q = Q(view_type='public') | Q(view_type='openidea')
         if user and user.is_authenticated and getattr(user, 'college', ''):
-            view_type_q |= Q(view_type='college', college=user.college.strip())
+            view_type_q |= Q(view_type='college', college__iexact=user.college.strip())
         qs = queryset.filter(view_type_q)
 
         if category:
             qs = qs.filter(category__iexact=category)
         if location:
-            qs = qs.filter(location__icontains=location)
+            qs = qs.filter(Q(location__icontains=location) | Q(city__icontains=location))
 
-        # 1. Base counts
+        # 1. Base counts & distance annotation
         qs = qs.annotate(
             _likes_count=Count('likes', distinct=True),
             _comments_count=Count('comments', distinct=True)
         )
+        qs = annotate_distance(qs, ref_lat, ref_lng)
 
         # 2. Skill match with proficiency weighting (up to 40 pts)
         adv_skills = []
@@ -256,19 +283,24 @@ class FeedView(generics.ListAPIView):
             output_field=IntegerField()
         )
 
-        # 3. Location match (up to 25 pts)
-        if user and user.is_authenticated and getattr(user, 'location', ''):
+        # 3. Location / Ripple proximity score (up to 40 pts)
+        has_coords = bool(ref_lat is not None and ref_lng is not None)
+        ripple_score = build_ripple_score_expression(has_coords=has_coords)
+
+        # Text location fallback if GPS coordinates are not provided (up to 25 pts)
+        if not has_coords and user and user.is_authenticated and getattr(user, 'location', ''):
             user_loc = user.location.strip()
-            location_score = Case(
+            text_loc_score = Case(
                 When(location__iexact=user_loc, then=Value(25)),
-                When(location__icontains='remote', then=Value(10)),
+                When(city__iexact=user_loc, then=Value(25)),
+                When(is_remote=True, then=Value(15)),
                 default=Value(0),
                 output_field=IntegerField()
             )
         else:
-            location_score = Value(0, output_field=IntegerField())
+            text_loc_score = Value(0, output_field=IntegerField())
 
-        # 4. College match (up to 20 pts)
+        # 4. College match boost (+20 pts)
         if user and user.is_authenticated and getattr(user, 'college', ''):
             user_col = user.college.strip()
             college_score = Case(
@@ -337,14 +369,15 @@ class FeedView(generics.ListAPIView):
             _newer_author_posts=newer_author_posts_subquery
         ).annotate(
             _skill_score=skill_score,
-            _location_score=location_score,
+            _ripple_score=ripple_score,
+            _text_loc_score=text_loc_score,
             _college_score=college_score,
             _engagement_score=engagement_score,
             _recency_score=recency_score,
             _author_penalty=author_penalty
         ).annotate(
             _ranking_score=ExpressionWrapper(
-                F('_skill_score') + F('_location_score') + F('_college_score') +
+                F('_skill_score') + F('_ripple_score') + F('_text_loc_score') + F('_college_score') +
                 F('_engagement_score') + F('_recency_score') - F('_author_penalty'),
                 output_field=IntegerField()
             )
@@ -360,6 +393,9 @@ class FeedView(generics.ListAPIView):
         category = (self.request.query_params.get('category') or '').strip()
         location = (self.request.query_params.get('location') or '').strip()
 
+        # Resolve coordinates from query params or user profile
+        ref_lat, ref_lng = self._resolve_coordinates()
+
         # Resolve effective feed mode
         feed_mode = mode_param or filter_param or 'for_you'
 
@@ -369,21 +405,23 @@ class FeedView(generics.ListAPIView):
         base_qs = self._apply_moderation_and_privacy(base_qs, user)
 
         if feed_mode == 'following':
-            return self._build_following_queryset(base_qs, user, category, location)
+            qs = self._build_following_queryset(base_qs, user, category, location)
+            return annotate_distance(qs, ref_lat, ref_lng)
 
         if feed_mode == 'college':
             if user and user.is_authenticated and getattr(user, 'college', ''):
-                qs = base_qs.filter(view_type='college', college=user.college.strip())
+                qs = base_qs.filter(view_type='college', college__iexact=user.college.strip())
             else:
                 return Post.objects.none()
             if category:
                 qs = qs.filter(category__iexact=category)
             if location:
-                qs = qs.filter(location__icontains=location)
+                qs = qs.filter(Q(location__icontains=location) | Q(city__icontains=location))
             qs = qs.annotate(
                 _likes_count=Count('likes', distinct=True),
                 _comments_count=Count('comments', distinct=True)
             )
+            qs = annotate_distance(qs, ref_lat, ref_lng)
             return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
 
         if feed_mode == 'openidea':
@@ -391,11 +429,12 @@ class FeedView(generics.ListAPIView):
             if category:
                 qs = qs.filter(category__iexact=category)
             if location:
-                qs = qs.filter(location__icontains=location)
+                qs = qs.filter(Q(location__icontains=location) | Q(city__icontains=location))
             qs = qs.annotate(
                 _likes_count=Count('likes', distinct=True),
                 _comments_count=Count('comments', distinct=True)
             )
+            qs = annotate_distance(qs, ref_lat, ref_lng)
             return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
 
         if feed_mode == 'public':
@@ -403,15 +442,16 @@ class FeedView(generics.ListAPIView):
             if category:
                 qs = qs.filter(category__iexact=category)
             if location:
-                qs = qs.filter(location__icontains=location)
+                qs = qs.filter(Q(location__icontains=location) | Q(city__icontains=location))
             qs = qs.annotate(
                 _likes_count=Count('likes', distinct=True),
                 _comments_count=Count('comments', distinct=True)
             )
+            qs = annotate_distance(qs, ref_lat, ref_lng)
             return _annotate_user_interactions(qs, user).order_by('-created_at', '-id')
 
         # Default: for_you
-        return self._build_for_you_queryset(base_qs, user, category, location)
+        return self._build_for_you_queryset(base_qs, user, category, location, ref_lat, ref_lng)
 
 
 

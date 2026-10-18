@@ -22,6 +22,10 @@ class Post(models.Model):
     view_type = models.CharField(max_length=20, choices=VIEW_TYPE_CHOICES, default='public')
     location = models.CharField(max_length=255, blank=True)
     college = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    is_remote = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -33,6 +37,8 @@ class Post(models.Model):
             models.Index(fields=['view_type', '-created_at']),
             models.Index(fields=['location', '-created_at']),
             models.Index(fields=['college', '-created_at']),
+            models.Index(fields=['is_remote', '-created_at']),
+            models.Index(fields=['latitude', 'longitude']),
         ]
     
     def __str__(self):

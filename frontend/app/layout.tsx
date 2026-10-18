@@ -18,8 +18,23 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: 'ENQUEbet - Collaborative Idea Building Platform',
-  description: 'Build your ideas with the right team',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  title: 'ENQUEbet | Proof of Work & Idea Building Platform',
+  description: 'Connect, assemble squads, build ideas, and earn verifiable Proof of Work credentials.',
+  icons: {
+    icon: [
+      { url: '/logo.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '192x192' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/apple-icon.png',
+  },
+  openGraph: {
+    title: 'ENQUEbet | Proof of Work & Idea Building Platform',
+    description: 'Assemble squads, build projects, and verify execution credentials.',
+    images: ['/logo.png'],
+  },
 };
 
 export default function RootLayout({
@@ -39,15 +54,18 @@ export default function RootLayout({
           <Toaster
             position="top-right"
             toastOptions={{
-              duration: 3000,
+              duration: 3500,
               style: {
-                background: '#1a1a1a',
+                background: '#0d0d18',
                 color: '#ffffff',
-                border: '1px solid #333',
+                border: '1px solid #1a1a2e',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+                fontSize: '13px',
+                borderRadius: '12px',
               },
               success: {
                 iconTheme: {
-                  primary: '#a855f7',
+                  primary: '#10b981',
                   secondary: '#ffffff',
                 },
               },

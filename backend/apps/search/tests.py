@@ -243,3 +243,49 @@ class SearchAPITestCase(TestCase):
         self.assertEqual(len(resp_projects.data['builders']), 0)
         self.assertEqual(len(resp_projects.data['projects']), 1)
         self.assertEqual(resp_projects.data['pagination']['total_posts'], 1)
+
+    def test_search_suggestions(self):
+        """Auto-complete endpoint returns structured suggestions."""
+        # Short query returns empty
+        resp_short = self.client.get('/api/v1/search/suggestions/?q=a')
+        self.assertEqual(resp_short.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_short.data['builders'], [])
+
+        # Meaningful query
+        resp = self.client.get('/api/v1/search/suggestions/?q=al')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('skills', resp.data)
+        self.assertIn('colleges', resp.data)
+        self.assertIn('categories', resp.data)
+        self.assertIn('builders', resp.data)
+        builder_usernames = [b['username'] for b in resp.data['builders']]
+        self.assertIn('alice_dev', builder_usernames)
+
+    def test_search_builders_availability_and_verified(self):
+        """Availability and verified_only filters work as expected."""
+        self.user1.availability_status = 'open_to_cofound'
+        self.user1.save()
+
+        # Filter by availability
+        resp = self.client.get('/api/v1/search/?type=builders&availability=open_to_cofound')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        usernames = [u['username'] for u in resp.data['builders']]
+        self.assertIn('alice_dev', usernames)
+        self.assertNotIn('bob_designer', usernames)
+
+        # Filter by verified_only
+        resp_v = self.client.get('/api/v1/search/?type=builders&verified_only=true')
+        self.assertEqual(resp_v.status_code, status.HTTP_200_OK)
+        for u in resp_v.data['builders']:
+            self.assertGreater(u.get('verification_level', 0), 0)
+
+    def test_search_sort_by_reputation(self):
+        """sort_by=reputation orders highest reputation first."""
+        resp = self.client.get('/api/v1/search/?type=builders&sort_by=reputation')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        builders = resp.data['builders']
+        self.assertGreaterEqual(len(builders), 2)
+        # alice_dev reputation is 150, bob_designer is 90
+        self.assertEqual(builders[0]['username'], 'alice_dev')
+        self.assertEqual(builders[1]['username'], 'bob_designer')
+

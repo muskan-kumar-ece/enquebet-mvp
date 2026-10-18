@@ -4,8 +4,9 @@ Workspace, Team Governance, Kanban Tasks, Deliverables, Peer Review & Proof of W
 import hashlib
 import json
 import uuid
+from urllib.parse import urlparse
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Prefetch
 from django.utils import timezone
 from rest_framework import status, generics
 from rest_framework.response import Response
@@ -27,6 +28,7 @@ from .workspace_serializers import (
     TaskReviewSerializer, ProofOfWorkSerializer, PeerReviewSerializer
 )
 from .reputation_service import ReputationService
+from .events import broadcast_workspace_event
 
 
 
@@ -35,7 +37,13 @@ class WorkspaceLookupMixin:
     def get_workspace(self):
         identifier = self.kwargs.get('workspace_id') or self.kwargs.get('pk') or self.kwargs.get('post_id')
         try:
-            return Workspace.objects.select_related('post', 'post__user').get(
+            return Workspace.objects.select_related('post', 'post__user').prefetch_related(
+                'milestones', 'memberships__user'
+            ).annotate(
+                annotated_tasks_count=Count('tasks', distinct=True),
+                annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
+                annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
+            ).get(
                 Q(id=identifier) | Q(post_id=identifier)
             )
         except (Workspace.DoesNotExist, ValueError):
@@ -47,7 +55,13 @@ class WorkspaceLookupMixin:
                     user=post.user,
                     defaults={'role': 'owner', 'status': 'active'}
                 )
-                return workspace
+                return Workspace.objects.select_related('post', 'post__user').prefetch_related(
+                    'milestones', 'memberships__user'
+                ).annotate(
+                    annotated_tasks_count=Count('tasks', distinct=True),
+                    annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
+                    annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
+                ).get(id=workspace.id)
             raise NotFound('Workspace not found')
 
 
@@ -63,7 +77,13 @@ class MyWorkspacesListView(APIView):
 
         workspaces = Workspace.objects.filter(
             Q(post__user=request.user) | Q(id__in=active_ids)
-        ).distinct().select_related('post', 'post__user').order_by('-updated_at')
+        ).distinct().select_related('post', 'post__user').prefetch_related(
+            'milestones', 'memberships__user'
+        ).annotate(
+            annotated_tasks_count=Count('tasks', distinct=True),
+            annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
+            annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
+        ).order_by('-updated_at')
 
         serializer = WorkspaceDetailSerializer(workspaces, many=True, context={'request': request})
         return Response(serializer.data)
@@ -109,6 +129,11 @@ class WorkspaceDetailView(WorkspaceLookupMixin, APIView):
             event_type='workspace_updated',
             description=f"{request.user.username} updated workspace links/settings",
             actor=request.user,
+        )
+        broadcast_workspace_event(
+            str(workspace.id),
+            'workspace_updated',
+            {'workspace_id': str(workspace.id), 'actor': request.user.username}
         )
         serializer = WorkspaceDetailSerializer(workspace, context={'request': request})
         return Response(serializer.data)
@@ -175,6 +200,11 @@ class TeamMemberRoleUpdateView(WorkspaceLookupMixin, APIView):
                 actor=request.user,
                 metadata={'previous_owner_id': str(request.user.id), 'new_owner_id': str(membership.user.id)}
             )
+            broadcast_workspace_event(
+                str(workspace.id),
+                'member_updated',
+                {'member_id': str(membership.id), 'role': 'owner', 'actor': request.user.username}
+            )
             return Response({'message': 'Ownership successfully transferred', 'role': 'owner'})
 
         membership.role = new_role
@@ -187,6 +217,12 @@ class TeamMemberRoleUpdateView(WorkspaceLookupMixin, APIView):
             description=f"{membership.user.username}'s role changed to {new_role.capitalize()}",
             actor=request.user,
             metadata={'user_id': str(membership.user.id), 'role': new_role}
+        )
+
+        broadcast_workspace_event(
+            str(workspace.id),
+            'member_updated',
+            {'member_id': str(membership.id), 'role': new_role, 'actor': request.user.username}
         )
 
         return Response(TeamMembershipSerializer(membership, context={'request': request}).data)
@@ -246,6 +282,11 @@ class TeamMemberLeaveView(WorkspaceLookupMixin, APIView):
         )
 
         workspace.recalculate_progress()
+        broadcast_workspace_event(
+            str(workspace.id),
+            'member_left',
+            {'user_id': str(request.user.id), 'username': request.user.username, 'tasks_unassigned': reassigned_count}
+        )
         return Response({'message': 'You have left the workspace', 'tasks_unassigned': reassigned_count})
 
 
@@ -315,6 +356,11 @@ class TeamMemberRemoveView(WorkspaceLookupMixin, APIView):
         )
 
         workspace.recalculate_progress()
+        broadcast_workspace_event(
+            str(workspace.id),
+            'member_removed',
+            {'user_id': str(target_membership.user.id), 'username': target_membership.user.username, 'reason': reason, 'tasks_unassigned': reassigned_count}
+        )
         return Response({'message': 'Member removed successfully', 'tasks_unassigned': reassigned_count})
 
 
@@ -358,7 +404,13 @@ class ProjectMilestoneListCreateView(WorkspaceLookupMixin, APIView):
             description=f"Milestone '{milestone.title}' created by {request.user.username}",
             actor=request.user
         )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        milestone_data = serializer.data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'milestone_created',
+            {'milestone': milestone_data}
+        )
+        return Response(milestone_data, status=status.HTTP_201_CREATED)
 
 
 class ProjectTaskListCreateView(WorkspaceLookupMixin, APIView):
@@ -421,7 +473,13 @@ class ProjectTaskListCreateView(WorkspaceLookupMixin, APIView):
             )
 
         workspace.recalculate_progress()
-        return Response(ProjectTaskSerializer(task, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        serialized_task = ProjectTaskSerializer(task, context={'request': request}).data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'task_created',
+            {'task': serialized_task}
+        )
+        return Response(serialized_task, status=status.HTTP_201_CREATED)
 
 
 class ProjectTaskDetailView(WorkspaceLookupMixin, APIView):
@@ -442,6 +500,11 @@ class ProjectTaskDetailView(WorkspaceLookupMixin, APIView):
         if not task:
             raise NotFound('Task not found')
 
+        is_lead_or_owner = (
+            workspace.post.user == request.user or
+            TeamMembership.objects.filter(workspace=workspace, user=request.user, status='active', role__in=['owner', 'lead']).exists()
+        )
+
         new_status = request.data.get('status')
         new_assignee_id = request.data.get('assignee_id')
 
@@ -450,6 +513,7 @@ class ProjectTaskDetailView(WorkspaceLookupMixin, APIView):
             valid_statuses = dict(ProjectTask.STATUS_CHOICES).keys()
             if new_status not in valid_statuses:
                 return Response({'error': f'Invalid status. Choose from: {", ".join(valid_statuses)}'}, status=status.HTTP_400_BAD_REQUEST)
+
             task.status = new_status
             if new_status == 'completed':
                 task.completed_at = timezone.now()
@@ -484,7 +548,13 @@ class ProjectTaskDetailView(WorkspaceLookupMixin, APIView):
 
         task.save()
         workspace.recalculate_progress()
-        return Response(ProjectTaskSerializer(task, context={'request': request}).data)
+        serialized_task = ProjectTaskSerializer(task, context={'request': request}).data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'task_updated',
+            {'task': serialized_task}
+        )
+        return Response(serialized_task)
 
 
 class TaskDeliverableSubmitView(WorkspaceLookupMixin, APIView):
@@ -498,6 +568,9 @@ class TaskDeliverableSubmitView(WorkspaceLookupMixin, APIView):
         if not task:
             raise NotFound('Task not found')
 
+        if task.status in ('completed', 'cancelled'):
+            return Response({'error': f'Cannot submit deliverables for a {task.status} task.'}, status=status.HTTP_400_BAD_REQUEST)
+
         pr_url = (request.data.get('pr_url') or '').strip()
         file_url = (request.data.get('file_url') or '').strip()
         title = (request.data.get('title') or f"Deliverable for {task.title}").strip()
@@ -505,6 +578,16 @@ class TaskDeliverableSubmitView(WorkspaceLookupMixin, APIView):
 
         if not pr_url and not file_url:
             return Response({'error': 'Either a Pull Request / repository URL or file attachment is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if pr_url:
+            parsed_pr = urlparse(pr_url)
+            if parsed_pr.scheme not in ('http', 'https') or not parsed_pr.netloc:
+                return Response({'error': 'Pull Request / repository URL must be a valid HTTP or HTTPS URL.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if file_url:
+            parsed_file = urlparse(file_url)
+            if parsed_file.scheme not in ('http', 'https') or not parsed_file.netloc:
+                return Response({'error': 'File attachment URL must be a valid HTTP or HTTPS URL.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Increment version number
         latest_version = task.deliverables.count() + 1
@@ -542,7 +625,13 @@ class TaskDeliverableSubmitView(WorkspaceLookupMixin, APIView):
             )
 
         workspace.recalculate_progress()
-        return Response(TaskDeliverableSerializer(deliverable).data, status=status.HTTP_201_CREATED)
+        deliverable_data = TaskDeliverableSerializer(deliverable).data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'deliverable_submitted',
+            {'task_id': str(task.id), 'deliverable': deliverable_data}
+        )
+        return Response(deliverable_data, status=status.HTTP_201_CREATED)
 
 
 class TaskDeliverableReviewView(WorkspaceLookupMixin, APIView):
@@ -603,7 +692,6 @@ class TaskDeliverableReviewView(WorkspaceLookupMixin, APIView):
 
         task.save(update_fields=['status', 'completed_at', 'updated_at'])
 
-
         ProjectActivity.log(
             workspace=workspace,
             event_type='deliverable_reviewed',
@@ -621,7 +709,13 @@ class TaskDeliverableReviewView(WorkspaceLookupMixin, APIView):
         )
 
         workspace.recalculate_progress()
-        return Response(TaskReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+        review_data = TaskReviewSerializer(review).data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'deliverable_reviewed',
+            {'task_id': str(task.id), 'review': review_data, 'task_status': task.status}
+        )
+        return Response(review_data, status=status.HTTP_201_CREATED)
 
 
 class ProjectCompletionRequestView(WorkspaceLookupMixin, APIView):
@@ -657,6 +751,16 @@ class ProjectCompletionRequestView(WorkspaceLookupMixin, APIView):
 
         if active_tasks.count() == 0:
             return Response({'error': 'Cannot complete project without any delivered tasks.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Quality floor: Ensure no deliverables are in review or pending changes
+        pending_deliverables = TaskDeliverable.objects.filter(
+            task__workspace=workspace,
+            task__status__in=['in_review', 'changes_requested']
+        ).exists()
+        if pending_deliverables:
+            return Response({
+                'error': 'Project completion blocked: There are deliverables pending review or changes.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Update workspace status
         workspace.status = 'completed'
@@ -715,9 +819,16 @@ class ProjectCompletionRequestView(WorkspaceLookupMixin, APIView):
         # Award verified project completion reputation to lead and contributing builders
         ReputationService.award_project_completed(proof, workspace, actor=request.user)
 
+        proof_data = ProofOfWorkSerializer(proof).data
+        broadcast_workspace_event(
+            str(workspace.id),
+            'project_completed',
+            {'proof_of_work': proof_data}
+        )
+
         return Response({
             'message': 'Project completed successfully',
-            'proof_of_work': ProofOfWorkSerializer(proof).data
+            'proof_of_work': proof_data
         })
 
 
@@ -742,6 +853,12 @@ class ProjectReopenView(WorkspaceLookupMixin, APIView):
             event_type='project_reopened',
             description=f"Workspace reopened by {request.user.username}",
             actor=request.user
+        )
+
+        broadcast_workspace_event(
+            str(workspace.id),
+            'project_reopened',
+            {'status': 'active'}
         )
 
         return Response({'message': 'Workspace reopened successfully', 'status': 'active'})

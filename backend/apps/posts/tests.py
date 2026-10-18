@@ -299,3 +299,192 @@ class FeedPhase2Tests(APITestCase):
         titles = [p['title'] for p in results]
         self.assertNotIn('Abusive Post (Reported 3x)', titles)
         self.assertIn('Good Post (Reported 1x)', titles)
+
+
+class GeoRippleFeedTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='builder@example.com',
+            username='builder_geo',
+            password='Password123!',
+            full_name='Geo Builder',
+            college='IIT Bombay',
+            city='Mumbai',
+            latitude=19.0760,
+            longitude=72.8777,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_haversine_distance_calculation(self):
+        """Python haversine_distance_km returns correct geodesic distance."""
+        from apps.posts.services.geo_service import haversine_distance_km
+
+        # Mumbai to Pune (~120 km)
+        mumbai_lat, mumbai_lng = 19.0760, 72.8777
+        pune_lat, pune_lng = 18.5204, 73.8567
+        dist = haversine_distance_km(mumbai_lat, mumbai_lng, pune_lat, pune_lng)
+        self.assertIsNotNone(dist)
+        self.assertGreater(dist, 110)
+        self.assertLess(dist, 135)
+
+        # Same point should be ~0 km
+        same_dist = haversine_distance_km(mumbai_lat, mumbai_lng, mumbai_lat, mumbai_lng)
+        self.assertAlmostEqual(same_dist, 0.0, places=1)
+
+        # Missing coords returns None
+        self.assertIsNone(haversine_distance_km(None, 72.8, 19.0, 72.8))
+
+    def test_post_creation_with_geo_and_remote_fields(self):
+        """POST /api/v1/posts/create/ persists city, latitude, longitude, and is_remote."""
+        payload = {
+            'title': 'Local Robotics Project',
+            'description': 'Building autonomous rover on campus.',
+            'category': 'Robotics',
+            'view_type': 'public',
+            'city': 'Mumbai',
+            'latitude': 19.0760,
+            'longitude': 72.8777,
+            'is_remote': False,
+            'requirements': ['Hardware Engineer', 'ROS Developer'],
+            'tags': ['Robotics', 'ROS'],
+        }
+        response = self.client.post('/api/v1/posts/create/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['city'], 'Mumbai')
+        self.assertAlmostEqual(float(response.data['latitude']), 19.0760, places=4)
+        self.assertAlmostEqual(float(response.data['longitude']), 72.8777, places=4)
+        self.assertFalse(response.data['is_remote'])
+
+        # Verify in database
+        post_id = response.data['id']
+        post = Post.objects.get(id=post_id)
+        self.assertEqual(post.city, 'Mumbai')
+        self.assertFalse(post.is_remote)
+
+    def test_distance_km_in_feed_response(self):
+        """Feed serializer computes distance_km relative to user coordinates or lat/lng query params."""
+        other_user = User.objects.create_user(email='other@example.com', username='other_geo', password='Pass123!')
+        
+        # Post located ~15 km away from user (e.g. Bandra / suburban Mumbai)
+        post = Post.objects.create(
+            user=other_user,
+            title='Nearby Web3 App',
+            description='Web3 dev project',
+            category='Tech',
+            view_type='public',
+            city='Mumbai',
+            latitude=19.1200,
+            longitude=72.8500,
+            is_remote=False,
+        )
+
+        # Query feed passing user's lat and lng
+        response = self.client.get(f'/api/v1/posts/feed/?mode=for_you&lat=19.0760&lng=72.8777')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        self.assertGreaterEqual(len(results), 1)
+        found = [p for p in results if p['id'] == str(post.id)][0]
+        self.assertIn('distance_km', found)
+        self.assertIsNotNone(found['distance_km'])
+        self.assertGreater(found['distance_km'], 0)
+        self.assertLess(found['distance_km'], 20)
+
+    def test_wave1_hyperlocal_ranking_advantage(self):
+        """New posts (<12h) within 5 km receive Wave 1 boost (+40) over distant posts."""
+        other_user = User.objects.create_user(email='other2@example.com', username='other_geo2', password='Pass123!')
+
+        # Post 1: Hyper-local (< 3 km from user)
+        p_local = Post.objects.create(
+            user=other_user,
+            title='Hyper-Local Campus Hack',
+            description='In our immediate campus radius',
+            category='Hackathon',
+            view_type='public',
+            city='Mumbai',
+            latitude=19.0780,  # very close to 19.0760
+            longitude=72.8780,
+            is_remote=False,
+        )
+
+        # Post 2: Far away in Delhi (~1150 km)
+        p_far = Post.objects.create(
+            user=other_user,
+            title='Distant Delhi Hackathon',
+            description='Far away project',
+            category='Hackathon',
+            view_type='public',
+            city='Delhi',
+            latitude=28.6139,
+            longitude=77.2090,
+            is_remote=False,
+        )
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you&lat=19.0760&lng=72.8777')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        result_ids = [p['id'] for p in results]
+        
+        self.assertIn(str(p_local.id), result_ids)
+        self.assertIn(str(p_far.id), result_ids)
+        # p_local must rank before p_far
+        self.assertLess(result_ids.index(str(p_local.id)), result_ids.index(str(p_far.id)))
+
+    def test_college_gating_and_isolation(self):
+        """College-mode posts are strictly isolated to users from the same college."""
+        other_user = User.objects.create_user(
+            email='iitb_friend@example.com',
+            username='iitb_friend',
+            password='Pass123!',
+            college='IIT Bombay',
+        )
+        mit_user = User.objects.create_user(
+            email='mit_student@example.com',
+            username='mit_student',
+            password='Pass123!',
+            college='MIT Boston',
+        )
+
+        p_iitb = Post.objects.create(
+            user=other_user,
+            title='IIT Bombay Secret Project',
+            description='Campus exclusive',
+            category='Campus',
+            view_type='college',
+            college='IIT Bombay',
+        )
+        p_mit = Post.objects.create(
+            user=mit_user,
+            title='MIT Solar Car',
+            description='MIT campus exclusive',
+            category='Campus',
+            view_type='college',
+            college='MIT Boston',
+        )
+
+        # Alice (user.college='IIT Bombay') queries college feed
+        response = self.client.get('/api/v1/posts/feed/?mode=college')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        titles = [p['title'] for p in results]
+
+        self.assertIn('IIT Bombay Secret Project', titles)
+        self.assertNotIn('MIT Solar Car', titles)
+
+    def test_remote_projects_visible_globally(self):
+        """Remote projects receive is_remote scoring and surface globally without distance penalty."""
+        author = User.objects.create_user(email='remote_auth@example.com', username='remote_auth', password='Pass123!')
+        p_remote = Post.objects.create(
+            user=author,
+            title='Open Source Remote Library',
+            description='Anyone from anywhere can collaborate',
+            category='Open Source',
+            view_type='public',
+            is_remote=True,
+        )
+
+        response = self.client.get('/api/v1/posts/feed/?mode=for_you&lat=19.0760&lng=72.8777')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        titles = [p['title'] for p in results]
+        self.assertIn('Open Source Remote Library', titles)
+

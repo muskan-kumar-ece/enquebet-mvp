@@ -42,16 +42,16 @@ export default function RightPanel() {
                 {/* Profile Card — real user data */}
                 <div className="card relative overflow-hidden">
                     {/* Subtle gradient background */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-purple/5 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-brand-primary/5 to-transparent pointer-events-none" />
                     <div className="relative flex flex-col items-center">
                         {user?.avatar_url || user?.profile_image ? (
                             <img
                                 src={user.avatar_url || user.profile_image}
                                 alt={user.full_name || user.username}
-                                className="w-20 h-20 rounded-full mb-3 border-4 border-purple/20 object-cover shadow-lg shadow-purple/10"
+                                className="w-20 h-20 rounded-full mb-3 border-2 border-brand-primary/30 object-cover ring-2 ring-white/5"
                             />
                         ) : (
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple to-purple-dark mb-3 border-4 border-purple/20 flex items-center justify-center text-xl font-bold shadow-lg shadow-purple/10">
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-primary to-brand-dark mb-3 border-2 border-brand-primary/30 flex items-center justify-center text-xl font-bold ring-2 ring-white/5">
                                 {authLoading ? '' : initials}
                             </div>
                         )}
@@ -67,7 +67,7 @@ export default function RightPanel() {
                                 <p className="text-text-muted text-xs">@{user.username}</p>
 
                                 {user.headline && (
-                                    <p className="text-purple-light text-xs font-medium text-center mt-1 px-2 line-clamp-2">
+                                    <p className="text-brand-light text-xs font-medium text-center mt-1 px-2 line-clamp-2">
                                         {user.headline}
                                     </p>
                                 )}
@@ -87,19 +87,19 @@ export default function RightPanel() {
                                         <div className="text-text-muted text-[10px] uppercase tracking-wider">Following</div>
                                     </div>
                                     <div className="text-center">
-                                        <div className="font-bold text-sm text-purple-light">{user.reputation_score ?? 0}</div>
+                                        <div className="font-bold text-sm text-brand-light">{user.reputation_score ?? 0}</div>
                                         <div className="text-text-muted text-[10px] uppercase tracking-wider">Rep</div>
                                     </div>
                                 </div>
 
                                 {user.completeness_score !== undefined && user.completeness_score < 100 && (
-                                    <Link href="/profile" className="w-full mt-3 px-3 py-1.5 rounded-lg bg-bg-card-elevated border border-border-default hover:border-purple/40 transition-colors block">
+                                    <Link href="/profile" className="w-full mt-3 px-3 py-1.5 rounded-lg bg-bg-card-elevated border border-border-default hover:border-brand-primary/40 transition-colors block">
                                         <div className="flex justify-between items-center text-[11px] mb-1">
                                             <span className="text-text-secondary">Profile Setup</span>
-                                            <span className="text-purple-light font-semibold">{user.completeness_score}%</span>
+                                            <span className="text-brand-light font-semibold">{user.completeness_score}%</span>
                                         </div>
                                         <div className="w-full h-1.5 bg-bg-primary rounded-full overflow-hidden">
-                                            <div className="h-full bg-gradient-to-r from-purple to-primary rounded-full transition-all duration-300" style={{ width: `${user.completeness_score}%` }} />
+                                            <div className="h-full bg-gradient-to-r from-brand-primary to-brand-light rounded-full transition-all duration-300" style={{ width: `${user.completeness_score}%` }} />
                                         </div>
                                     </Link>
                                 )}
@@ -127,13 +127,13 @@ export default function RightPanel() {
                                     )}
                                 </div>
 
-                                <Link href="/profile" className="text-purple text-xs mt-3 hover:text-purple-light transition-colors font-medium">
+                                <Link href="/profile" className="text-brand-light text-xs mt-3 hover:text-white transition-colors font-medium">
                                     View Profile
                                 </Link>
                             </>
                         ) : (
                             <p className="text-text-secondary text-sm mt-2">
-                                <Link href="/auth/login" className="text-purple hover:underline">Login</Link> to see your profile
+                                <Link href="/auth/login" className="text-brand-light hover:underline">Login</Link> to see your profile
                             </p>
                         )}
                     </div>
@@ -148,7 +148,7 @@ export default function RightPanel() {
                             </div>
                             <h3 className="font-semibold text-sm">Activity</h3>
                         </div>
-                        <Link href="/notifications" className="text-purple text-xs hover:text-purple-light transition-colors font-medium">
+                        <Link href="/notifications" className="text-brand-light text-xs hover:text-white transition-colors font-medium">
                             View all
                         </Link>
                     </div>
@@ -172,7 +172,7 @@ export default function RightPanel() {
                             notifications.map((notif) => (
                                 <div
                                     key={notif.id}
-                                    className={`bg-bg-card/50 rounded-lg p-3 transition-colors hover:bg-bg-hover ${!notif.is_read ? 'border-l-2 border-purple' : ''}`}
+                                    className={`bg-bg-card/50 rounded-lg p-3 transition-colors hover:bg-bg-hover ${!notif.is_read ? 'border-l-2 border-brand-primary' : ''}`}
                                 >
                                     <p className="text-[0.8125rem] line-clamp-2 leading-snug">
                                         {notif.message || notif.content || 'New notification'}

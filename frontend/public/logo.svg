@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer structural boundary - tactical graphite tile with hairline rim -->
+  <rect x="3" y="3" width="42" height="42" rx="11" fill="#0A0E1A" stroke="#1E2638" stroke-width="1.5" />
+  
+  <!-- Top inner rim highlight -->
+  <line x1="14" y1="3.75" x2="34" y2="3.75" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1" />
+
+  <!-- Left architectural spine (Chalk White) -->
+  <path d="M13 13C13 11.8954 13.8954 11 15 11H19C20.1046 11 21 11.8954 21 13V35C21 36.1046 20.1046 37 19 37H15C13.8954 37 13 36.1046 13 35V13Z" fill="#F8FAFC" />
+  <path d="M13.5 13.5H20.5" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round" />
+
+  <!-- Top builder arm (Architect Electric Cobalt) -->
+  <path d="M21 12H33C34.1046 12 35 12.8954 35 14V17C35 18.1046 34.1046 19 33 19H21V12Z" fill="#1864FF" />
+  <path d="M22 13H33" stroke="#60A5FA" stroke-width="1" stroke-linecap="round" stroke-opacity="0.6" />
+
+  <!-- Middle queue connector block (Floating builder bridge) -->
+  <path d="M21 21.5H29C30.1046 21.5 31 22.3954 31 23.5V25.5C31 26.6046 30.1046 27.5 29 27.5H21V21.5Z" fill="#528BFF" />
+
+  <!-- Bottom builder arm (Architect Electric Cobalt) -->
+  <path d="M21 30H33C34.1046 30 35 30.8954 35 32V35C35 36.1046 34.1046 37 33 37H21V30Z" fill="#1864FF" />
+  
+  <!-- Precision crosshair registration dot -->
+  <circle cx="34" cy="24.5" r="1.5" fill="#1864FF" />
+</svg>

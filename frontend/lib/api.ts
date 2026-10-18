@@ -222,6 +222,11 @@ class ApiClient {
         category: string;
         view_type: string;
         location?: string;
+        college?: string;
+        city?: string;
+        latitude?: number;
+        longitude?: number;
+        is_remote?: boolean;
         requirements?: string[];
         tags?: string[];
         media?: File[];
@@ -233,6 +238,11 @@ class ApiClient {
             formData.append('category', data.category);
             formData.append('view_type', data.view_type);
             if (data.location) formData.append('location', data.location);
+            if (data.college) formData.append('college', data.college);
+            if (data.city) formData.append('city', data.city);
+            if (data.latitude !== undefined && data.latitude !== null) formData.append('latitude', String(data.latitude));
+            if (data.longitude !== undefined && data.longitude !== null) formData.append('longitude', String(data.longitude));
+            if (data.is_remote !== undefined) formData.append('is_remote', String(data.is_remote));
 
             // Send arrays as JSON strings to keep parsing consistent for multipart.
             if (data.requirements?.length) {
@@ -299,12 +309,22 @@ class ApiClient {
 
 
 
-    async getPosts(params?: { mode?: string; view_type?: string; category?: string; location?: string; page?: number }) {
+    async getPosts(params?: {
+        mode?: string;
+        view_type?: string;
+        category?: string;
+        location?: string;
+        lat?: number;
+        lng?: number;
+        page?: number;
+    }) {
         const queryParams = new URLSearchParams();
         if (params?.mode) queryParams.append('mode', params.mode);
         if (params?.view_type) queryParams.append('filter', params.view_type);
         if (params?.category) queryParams.append('category', params.category);
         if (params?.location) queryParams.append('location', params.location);
+        if (params?.lat !== undefined && params?.lat !== null) queryParams.append('lat', String(params.lat));
+        if (params?.lng !== undefined && params?.lng !== null) queryParams.append('lng', String(params.lng));
         if (params?.page && params.page > 1) queryParams.append('page', String(params.page));
 
         const query = queryParams.toString();
@@ -353,6 +373,56 @@ class ApiClient {
         });
     }
 
+    async deleteMeSecurely(password: string, confirmPhrase: string) {
+        return this.request<void>('/users/me/', {
+            method: 'DELETE',
+            body: JSON.stringify({ password, confirm_phrase: confirmPhrase }),
+        });
+    }
+
+    async getUserSessions() {
+        const data = await this.request<any>('/users/me/sessions/');
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async revokeUserSession(sessionId: string) {
+        return this.request<void>(`/users/me/sessions/${sessionId}/`, {
+            method: 'DELETE',
+        });
+    }
+
+    async revokeAllOtherSessions() {
+        return this.request<{ message: string }>('/users/me/sessions/revoke-others/', {
+            method: 'POST',
+        });
+    }
+
+    async getBlockedUsers() {
+        const data = await this.request<any>('/users/me/blocked/');
+        return Array.isArray(data) ? data : (data.results ?? []);
+    }
+
+    async blockUser(userId: string, reason?: string) {
+        return this.request<any>('/users/me/blocked/', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId, reason: reason || '' }),
+        });
+    }
+
+    async unblockUser(userId: string) {
+        return this.request<void>(`/users/me/blocked/${userId}/`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getTimeStats() {
+        return this.request<any>('/users/me/time-stats/');
+    }
+
+    async getProfessionalStats() {
+        return this.request<any>('/users/me/professional-stats/');
+    }
+
     async changeMyPassword(current_password: string, new_password: string) {
         return this.request<{ message: string }>('/users/me/password/', {
             method: 'PUT',
@@ -382,6 +452,9 @@ class ApiClient {
         college?: string;
         skills?: string;
         role?: string;
+        availability?: string;
+        verified_only?: boolean;
+        sort_by?: string;
         page?: number;
         page_size?: number;
     }) {
@@ -393,6 +466,9 @@ class ApiClient {
         if (opts?.college) params.append('college', opts.college);
         if (opts?.skills) params.append('skills', opts.skills);
         if (opts?.role) params.append('role', opts.role);
+        if (opts?.availability) params.append('availability', opts.availability);
+        if (opts?.verified_only) params.append('verified_only', 'true');
+        if (opts?.sort_by) params.append('sort_by', opts.sort_by);
         if (opts?.page && opts.page > 1) params.append('page', String(opts.page));
         if (opts?.page_size) params.append('page_size', String(opts.page_size));
 
@@ -413,6 +489,24 @@ class ApiClient {
                 has_prev?: boolean;
             };
         }>(`/search/?${params}`);
+    }
+
+    async getSearchSuggestions(query: string) {
+        if (!query || query.trim().length < 2) {
+            return { skills: [], colleges: [], categories: [], builders: [] };
+        }
+        return this.request<{
+            skills: string[];
+            colleges: string[];
+            categories: string[];
+            builders: Array<{
+                id: string;
+                username: string;
+                full_name: string;
+                profile_image?: string;
+                headline?: string;
+            }>;
+        }>(`/search/suggestions/?q=${encodeURIComponent(query.trim())}`);
     }
 
     async getComments(postId: string) {
@@ -502,20 +596,28 @@ class ApiClient {
         });
     }
 
-    async getConversations() {
-        const data = await this.request<any>('/chats/conversations/');
+    async getConversations(opts?: { type?: 'dms' | 'groups'; q?: string }) {
+        const params = new URLSearchParams();
+        if (opts?.type) params.append('type', opts.type);
+        if (opts?.q) params.append('q', opts.q);
+        const qs = params.toString();
+        const data = await this.request<any>(`/chats/conversations/${qs ? '?' + qs : ''}`);
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    async getMessages(conversationId: string) {
-        const data = await this.request<any>(`/chats/conversations/${conversationId}/messages/`);
+    async getMessages(conversationId: string, opts?: { page?: number; q?: string }) {
+        const params = new URLSearchParams();
+        if (opts?.page && opts.page > 1) params.append('page', String(opts.page));
+        if (opts?.q) params.append('q', opts.q);
+        const qs = params.toString();
+        const data = await this.request<any>(`/chats/conversations/${conversationId}/messages/${qs ? '?' + qs : ''}`);
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    async sendMessage(conversationId: string, content: string) {
+    async sendMessage(conversationId: string, content: string, attachment_url?: string) {
         return this.request<any>(`/chats/conversations/${conversationId}/messages/`, {
             method: 'POST',
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({ content, attachment_url }),
         });
     }
 
@@ -546,6 +648,10 @@ class ApiClient {
             method: 'PATCH',
             body: JSON.stringify(data),
         });
+    }
+
+    async updateWorkspaceMemberRole(workspaceId: string, memberId: string, data: { role?: string; role_title?: string }) {
+        return this.updateMemberRole(workspaceId, memberId, data);
     }
 
     async leaveWorkspace(workspaceId: string) {
@@ -708,6 +814,72 @@ class ApiClient {
     async recalculateReputation(userId: string) {
         return this.request<any>(`/users/${userId}/reputation/recalculate/`, {
             method: 'POST',
+        });
+    }
+
+    // --- Verified Builder Dossier & Timeline ---
+    async getUserDossier(userIdOrUsername?: string) {
+        const endpoint = userIdOrUsername ? `/users/${userIdOrUsername}/dossier/` : '/users/me/dossier/';
+        return this.request<any>(endpoint);
+    }
+
+    async getUserActivityMatrix(userIdOrUsername: string) {
+        return this.request<any>(`/users/${userIdOrUsername}/activity-matrix/`);
+    }
+
+    async updateDossierPreferences(data: {
+        availability_status?: string;
+        headline?: string;
+        pinned_proof_ids?: string[];
+    }) {
+        return this.request<any>('/users/me/dossier-preferences/', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getUserProofs(userIdOrUsername?: string) {
+        const endpoint = userIdOrUsername ? `/users/${userIdOrUsername}/proofs/` : '/users/me/proofs/';
+        return this.request<any[]>(endpoint);
+    }
+
+    async createExperience(data: any) {
+        return this.request<any>('/users/me/experiences/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateExperience(id: string, data: any) {
+        return this.request<any>(`/users/me/experiences/${id}/`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async deleteExperience(id: string) {
+        return this.request<void>(`/users/me/experiences/${id}/`, {
+            method: 'DELETE',
+        });
+    }
+
+    async createEducation(data: any) {
+        return this.request<any>('/users/me/educations/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateEducation(id: string, data: any) {
+        return this.request<any>(`/users/me/educations/${id}/`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async deleteEducation(id: string) {
+        return this.request<void>(`/users/me/educations/${id}/`, {
+            method: 'DELETE',
         });
     }
 }

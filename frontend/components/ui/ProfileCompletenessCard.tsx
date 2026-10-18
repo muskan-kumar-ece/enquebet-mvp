@@ -52,11 +52,11 @@ export default function ProfileCompletenessCard({ user, onStartEdit }: ProfileCo
 
     if (completenessScore >= 100) {
         return (
-            <div className="card mb-6 border-purple/30 bg-gradient-to-r from-purple/10 via-bg-card to-primary/10 p-4">
+            <div className="card mb-6 border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-bg-card to-brand-primary/10 p-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-purple/20 flex items-center justify-center text-purple-light">
-                            <Sparkles className="w-5 h-5 text-purple-light" />
+                        <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                            <Sparkles className="w-5 h-5 text-emerald-400" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
@@ -77,7 +77,7 @@ export default function ProfileCompletenessCard({ user, onStartEdit }: ProfileCo
                 <div>
                     <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-sm text-text-primary">Profile Completeness</h3>
-                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple/20 text-purple-light font-bold">
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-primary/15 text-brand-light font-bold border border-brand-primary/30">
                             {completenessScore}%
                         </span>
                     </div>
@@ -88,7 +88,7 @@ export default function ProfileCompletenessCard({ user, onStartEdit }: ProfileCo
                 {onStartEdit && (
                     <button
                         onClick={() => onStartEdit()}
-                        className="text-xs text-purple-light hover:text-purple font-medium flex items-center gap-1 shrink-0 self-start sm:self-auto"
+                        className="text-xs text-brand-light hover:text-white font-medium flex items-center gap-1 shrink-0 self-start sm:self-auto"
                     >
                         <span>Improve Profile</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -99,7 +99,7 @@ export default function ProfileCompletenessCard({ user, onStartEdit }: ProfileCo
             {/* Progress Bar */}
             <div className="w-full h-2 bg-bg-primary rounded-full overflow-hidden mb-4 border border-border-default">
                 <div
-                    className="h-full bg-gradient-to-r from-purple to-primary rounded-full transition-all duration-500"
+                    className="h-full bg-gradient-to-r from-brand-primary to-brand-light rounded-full transition-all duration-500"
                     style={{ width: `${completenessScore}%` }}
                 />
             </div>
@@ -113,11 +113,11 @@ export default function ProfileCompletenessCard({ user, onStartEdit }: ProfileCo
                             <button
                                 key={item.key}
                                 onClick={() => onStartEdit && onStartEdit(item.key)}
-                                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-hover hover:bg-bg-hover-light border border-border-default hover:border-purple/40 text-xs text-text-secondary hover:text-text-primary transition-all text-left"
+                                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-hover hover:bg-bg-hover-light border border-border-default hover:border-brand-primary/40 text-xs text-text-secondary hover:text-text-primary transition-all text-left"
                             >
-                                <CircleAlert className="w-3.5 h-3.5 text-purple-light group-hover:scale-110 transition-transform" />
+                                <CircleAlert className="w-3.5 h-3.5 text-brand-light group-hover:scale-110 transition-transform" />
                                 <span>{item.hint}</span>
-                                <span className="text-[10px] text-purple-light font-medium bg-purple/10 px-1 rounded">+{item.points}%</span>
+                                <span className="text-[10px] text-brand-light font-medium bg-brand-primary/10 px-1 rounded">+{item.points}%</span>
                             </button>
                         ))}
                     </div>

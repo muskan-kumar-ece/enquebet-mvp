@@ -1,28 +1,64 @@
 "use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
+import { X, MapPin, Globe, GraduationCap, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
+import { getUserCoordinates } from '@/lib/geo';
 import MediaUpload from '@/components/ui/MediaUpload';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import toast from 'react-hot-toast';
 
 export default function CreatePostPage() {
     const router = useRouter();
-    useRequireAuth();
+    const { user } = useRequireAuth();
     const [formData, setFormData] = useState({
         title: '',
         description: '',
         category: 'tech',
         view_type: 'public',
+        college: '',
         location: '',
+        city: '',
+        latitude: undefined as number | undefined,
+        longitude: undefined as number | undefined,
+        is_remote: false,
         requirements: [''],
         tags: [''],
     });
+    const [detectingLocation, setDetectingLocation] = useState(false);
     const [mediaFiles, setMediaFiles] = useState<File[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (user?.college && !formData.college) {
+            setFormData(prev => ({ ...prev, college: user.college || '' }));
+        }
+    }, [user, formData.college]);
+
+    const handleDetectLocation = async () => {
+        setDetectingLocation(true);
+        try {
+            const coords = await getUserCoordinates({ forceRefresh: true });
+            if (coords) {
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: coords.latitude,
+                    longitude: coords.longitude,
+                    city: coords.city || prev.city,
+                    location: coords.city || prev.location || `${coords.latitude}, ${coords.longitude}`,
+                }));
+                toast.success(`Location set: ${coords.city || 'Coarse GPS coordinates captured'}`);
+            } else {
+                toast.error('Location permission was denied or unavailable');
+            }
+        } catch {
+            toast.error('Could not determine current location');
+        } finally {
+            setDetectingLocation(false);
+        }
+    };
 
     const submitPost = useCallback(async () => {
         setError('');
@@ -154,7 +190,7 @@ export default function CreatePostPage() {
                     </div>
 
                     {/* Category & View Type */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="card">
                             <label className="block text-sm font-medium mb-2">Category</label>
                             <select
@@ -180,23 +216,86 @@ export default function CreatePostPage() {
                                 onChange={(e) => setFormData({ ...formData, view_type: e.target.value })}
                                 className="input w-full"
                             >
-                                <option value="public">Public</option>
-                                <option value="college">College Only</option>
-                                <option value="openidea">Open Idea</option>
+                                <option value="public">Public (Ripple Discovery)</option>
+                                <option value="college">College Only (Campus Exclusive)</option>
+                                <option value="openidea">Open Idea (Collaborative brainstorming)</option>
                             </select>
                         </div>
                     </div>
 
-                    {/* Location */}
-                    <div className="card">
-                        <label className="block text-sm font-medium mb-2">Location (Optional)</label>
-                        <input
-                            type="text"
-                            value={formData.location}
-                            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                            className="input w-full"
-                            placeholder="e.g., Hyderabad, Bangalore"
-                        />
+                    {/* College Specification (when College Only is chosen) */}
+                    {formData.view_type === 'college' && (
+                        <div className="card bg-brand-primary/5 border border-brand-primary/20">
+                            <label className="block text-sm font-medium text-brand-light mb-1.5 flex items-center gap-1.5">
+                                <GraduationCap className="w-4 h-4" /> University / College Campus
+                            </label>
+                            <p className="text-text-muted text-xs mb-2.5">
+                                Only students from this campus will be able to see and collaborate on this project.
+                            </p>
+                            <input
+                                type="text"
+                                value={formData.college}
+                                onChange={(e) => setFormData({ ...formData, college: e.target.value })}
+                                className="input w-full"
+                                placeholder="e.g., IIT Bombay, BITS Pilani, MIT"
+                                required
+                            />
+                        </div>
+                    )}
+
+                    {/* Remote or In-Person Proximity */}
+                    <div className="card space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <label className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+                                    <Globe className="w-4 h-4 text-emerald-400" /> Remote Friendly Project
+                                </label>
+                                <p className="text-text-muted text-xs mt-0.5">
+                                    Allows builders globally to discover and contribute regardless of physical distance.
+                                </p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={formData.is_remote}
+                                onChange={(e) => setFormData({ ...formData, is_remote: e.target.checked })}
+                                className="w-4 h-4 rounded text-brand-primary focus:ring-brand-primary cursor-pointer"
+                            />
+                        </div>
+
+                        {!formData.is_remote && (
+                            <div className="pt-3 border-t border-[#252533] space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+                                        <MapPin className="w-4 h-4 text-blue-400" /> Physical / Campus Location
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={handleDetectLocation}
+                                        disabled={detectingLocation}
+                                        className="text-xs text-brand-light hover:text-white flex items-center gap-1 font-medium disabled:opacity-50"
+                                    >
+                                        <RefreshCw className={`w-3 h-3 ${detectingLocation ? 'animate-spin' : ''}`} />
+                                        {detectingLocation ? 'Detecting...' : 'Detect GPS Coarse'}
+                                    </button>
+                                </div>
+                                <p className="text-text-muted text-xs">
+                                    Projects expand in ripple waves (0–5 km first 12h, 5–50 km next 36h, then nationwide). Coarse privacy (~1 km) is strictly enforced.
+                                </p>
+                                <input
+                                    type="text"
+                                    value={formData.location}
+                                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                    className="input w-full"
+                                    placeholder="e.g., Powai, Mumbai or Bangalore"
+                                />
+                                {formData.latitude !== undefined && formData.longitude !== undefined && (
+                                    <div className="text-[11px] text-blue-400/90 flex items-center gap-1 mt-1">
+                                        <MapPin className="w-3 h-3" />
+                                        <span>Coordinates pinned: {formData.latitude.toFixed(2)}, {formData.longitude.toFixed(2)} {formData.city ? `(${formData.city})` : ''}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Requirements */}
@@ -230,7 +329,7 @@ export default function CreatePostPage() {
                         <button
                             type="button"
                             onClick={addRequirement}
-                            className="text-purple hover:text-purple-light text-sm mt-2"
+                            className="text-brand-light hover:text-white text-sm mt-2 font-medium"
                         >
                             + Add Requirement
                         </button>
@@ -267,7 +366,7 @@ export default function CreatePostPage() {
                         <button
                             type="button"
                             onClick={addTag}
-                            className="text-purple hover:text-purple-light text-sm mt-2"
+                            className="text-brand-light hover:text-white text-sm mt-2 font-medium"
                         >
                             + Add Tag
                         </button>
