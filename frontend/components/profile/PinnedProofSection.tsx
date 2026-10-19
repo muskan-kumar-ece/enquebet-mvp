@@ -33,33 +33,48 @@ interface PinnedProofSectionProps {
 export default function PinnedProofSection({ proofs = [], isOwner, onManagePins }: PinnedProofSectionProps) {
     if (!proofs || proofs.length === 0) {
         return (
-            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#0c0c14]/90 backdrop-blur-xl p-8 mb-8 text-center shadow-xl">
-                <div className="w-14 h-14 rounded-2xl bg-[#1864ff]/10 border border-[#1864ff]/25 flex items-center justify-center text-[#4f8fff] mx-auto mb-4">
-                    <ShieldCheck className="w-7 h-7" />
+            <div className="w-full rounded-2xl border border-[#1e2230] bg-[#0d1017] p-5 mb-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#141824] border border-[#23283a] flex items-center justify-center text-emerald-400 shrink-0">
+                            <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-white">No Pinned Proofs of Work Yet</h3>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                                Cryptographic Proof of Work tokens (<span className="text-[#4f8fff] font-mono">ENQ-2026-XXXX</span>) are minted upon verified workspace milestone delivery.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                        <Link
+                            href="/collaboration"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141824] hover:bg-[#1a2030] text-zinc-200 border border-[#23283a] text-xs font-semibold transition-colors"
+                        >
+                            <span>Explore Collaborations</span>
+                            <ArrowUpRight className="w-3.5 h-3.5 text-[#1864ff]" />
+                        </Link>
+                        {isOwner && onManagePins && (
+                            <button
+                                onClick={onManagePins}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1864ff] hover:bg-[#2563eb] text-white text-xs font-semibold transition-colors"
+                            >
+                                <span>Select Pins</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">No Pinned Proofs of Work Yet</h3>
-                <p className="text-sm text-zinc-400 max-w-md mx-auto mb-5 leading-relaxed">
-                    Cryptographic Proof of Work tokens (<span className="text-[#4f8fff] font-mono">ENQ-2026-XXXX</span>) are minted automatically upon verified workspace completion.
-                </p>
-                {isOwner && (
-                    <button
-                        onClick={onManagePins}
-                        className="btn-brand inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-                    >
-                        <span>Select Pinned Proofs</span>
-                    </button>
-                )}
             </div>
         );
     }
 
     return (
-        <div className="w-full mb-8">
+        <div className="w-full mb-6">
             <div className="flex items-center justify-between mb-4 px-1">
-                <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <h2 className="text-lg font-bold text-white tracking-tight">Pinned Proofs of Work</h2>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono font-medium">
+                <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <h2 className="text-base font-bold text-white tracking-tight">Pinned Proofs of Work</h2>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono font-medium">
                         Cryptographically Verified
                     </span>
                 </div>
@@ -87,7 +102,7 @@ export default function PinnedProofSection({ proofs = [], isOwner, onManagePins 
                     return (
                         <div
                             key={proof.id}
-                            className="group relative rounded-2xl border border-white/[0.08] bg-[#0f0f18]/90 hover:border-[#1864ff]/40 backdrop-blur-xl p-5 transition-all duration-200 hover:shadow-xl flex flex-col justify-between"
+                            className="group relative rounded-2xl border border-[#1e2230] bg-[#0d1017] hover:border-[#2e364f] p-5 transition-all duration-200 shadow-sm flex flex-col justify-between"
                         >
                             {/* Top Badge & Hash Bar */}
                             <div>
@@ -111,7 +126,7 @@ export default function PinnedProofSection({ proofs = [], isOwner, onManagePins 
                             </div>
 
                             {/* Metrics & Teammates Footer */}
-                            <div className="pt-3 border-t border-white/[0.06] space-y-3">
+                            <div className="pt-3 border-t border-[#1e2230] space-y-3">
                                 <div className="flex items-center justify-between text-xs text-zinc-400">
                                     <div className="flex items-center gap-3">
                                         {proof.deliverables_count !== undefined && (
@@ -129,7 +144,7 @@ export default function PinnedProofSection({ proofs = [], isOwner, onManagePins 
                                     </div>
 
                                     {/* Hash Fingerprint */}
-                                    <span className="font-mono text-[10px] text-zinc-400 hidden sm:inline" title={proof.content_hash}>
+                                    <span className="font-mono text-[10px] text-zinc-500 hidden sm:inline" title={proof.content_hash}>
                                         {shortHash}
                                     </span>
                                 </div>
@@ -142,7 +157,7 @@ export default function PinnedProofSection({ proofs = [], isOwner, onManagePins 
                                                 {proof.contributors.slice(0, 4).map((c, idx) => (
                                                     <div
                                                         key={idx}
-                                                        className="w-6 h-6 rounded-full border-2 border-[#0f0f18] bg-[#1864ff]/20 flex items-center justify-center text-[10px] font-bold text-[#4f8fff]"
+                                                        className="w-6 h-6 rounded-full border-2 border-[#0d1017] bg-[#1864ff]/20 flex items-center justify-center text-[10px] font-bold text-[#4f8fff]"
                                                         title={`${c.name || c.username} (${c.role || 'Contributor'})`}
                                                     >
                                                         {(c.name || c.username || 'C')[0].toUpperCase()}

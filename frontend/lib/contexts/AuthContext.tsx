@@ -33,15 +33,22 @@ interface User {
     education?: any[];
     projects?: any[];
     experience?: any[];
+    certifications?: any[];
+    collaboration_preferences?: string[];
     resume_file?: string;
     linkedin_url?: string;
     github_url?: string;
     portfolio_url?: string;
+    is_staff?: boolean;
+    is_superuser?: boolean;
+    role?: string;
 }
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    isAdmin: boolean;
+    isStaff: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (data: any) => Promise<void>;
     logout: () => void;
@@ -117,8 +124,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const isStaff = Boolean(
+        user?.is_staff ||
+        user?.is_superuser ||
+        user?.role === 'admin' ||
+        user?.role === 'superadmin' ||
+        user?.role === 'moderator'
+    );
+    const isAdmin = isStaff;
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+        <AuthContext.Provider value={{ user, loading, isAdmin, isStaff, login, register, logout, updateUser }}>
             <WebSocketProvider>
                 {children}
             </WebSocketProvider>

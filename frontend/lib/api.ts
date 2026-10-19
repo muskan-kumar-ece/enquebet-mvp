@@ -300,6 +300,15 @@ class ApiClient {
         return this.request<{ count: number; results: any[] }>(`/users/${targetUserId}/following/`);
     }
 
+    async removeFollower(followerId: string) {
+        return this.request<{ removed: boolean; follower_id: string; followers_count: number }>(
+            `/users/${followerId}/remove-follower/`,
+            {
+                method: 'POST',
+            }
+        );
+    }
+
     async reportPost(postId: string, reason?: string) {
         return this.request<{ reported: boolean }>(`/posts/${postId}/report/`, {
             method: 'POST',
@@ -831,6 +840,7 @@ class ApiClient {
         availability_status?: string;
         headline?: string;
         pinned_proof_ids?: string[];
+        collaboration_preferences?: string[];
     }) {
         return this.request<any>('/users/me/dossier-preferences/', {
             method: 'PATCH',
@@ -882,7 +892,273 @@ class ApiClient {
             method: 'DELETE',
         });
     }
+
+    // Research & Living Papers endpoints
+    async getResearchPapers(params?: {
+        field?: string;
+        status?: string;
+        tab?: string;
+        user?: string;
+        author_id?: string;
+        has_code?: boolean;
+        has_bom?: boolean;
+        has_workspace?: boolean;
+        search?: string;
+        ordering?: string;
+    }) {
+        const searchParams = new URLSearchParams();
+        if (params?.field && params.field !== 'ALL') searchParams.set('field', params.field);
+        if (params?.status) searchParams.set('status', params.status);
+        if (params?.tab) searchParams.set('tab', params.tab);
+        if (params?.user) searchParams.set('user', params.user);
+        if (params?.author_id) searchParams.set('user', params.author_id);
+        if (params?.has_code) searchParams.set('has_code', 'true');
+        if (params?.has_bom) searchParams.set('has_bom', 'true');
+        if (params?.has_workspace) searchParams.set('has_workspace', 'true');
+        if (params?.search) searchParams.set('search', params.search);
+        if (params?.ordering) searchParams.set('ordering', params.ordering);
+
+        const query = searchParams.toString();
+        const url = query ? `/research/?${query}` : '/research/';
+        return this.request<any>(url);
+    }
+
+    async getResearchPaper(slug: string) {
+        return this.request<any>(`/research/${slug}/`);
+    }
+
+    async createResearchPaper(data: {
+        title: string;
+        abstract: string;
+        methodology_summary?: string;
+        field: string;
+        pdf_url?: string;
+        code_repo_url?: string;
+        dataset_url?: string;
+        live_demo_url?: string;
+        hardware_bom?: Array<{ name: string; slug?: string; quantity: number; role?: string; datasheet_url?: string }>;
+        open_collaborator_roles?: string[];
+        doi?: string;
+        keywords?: string[];
+        associated_workspace?: string;
+    }) {
+        return this.request<any>('/research/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async approveResearchPaper(slug: string) {
+        return this.request<any>(`/research/${slug}/approve/`, {
+            method: 'POST',
+        });
+    }
+
+    async rejectResearchPaper(slug: string, reason?: string) {
+        return this.request<any>(`/research/${slug}/reject/`, {
+            method: 'POST',
+            body: JSON.stringify({ reason: reason || '' }),
+        });
+    }
+
+    async submitResearchReview(slug: string, review: {
+        verdict: string;
+        rigor_score: number;
+        clarity_score: number;
+        reproducibility_score: number;
+        evaluation_notes: string;
+        environment_details?: string;
+        evidence_url?: string;
+    }) {
+        return this.request<any>(`/research/${slug}/review/`, {
+            method: 'POST',
+            body: JSON.stringify(review),
+        });
+    }
+
+    async getPaperCitation(slug: string, style: string = 'bibtex') {
+        return this.request<{ format: string; citation: string; paper_code: string }>(`/research/${slug}/citation/?style=${encodeURIComponent(style)}`);
+    }
+
+    async getResearchStats() {
+        return this.request<{
+            total_papers: number;
+            total_preprints: number;
+            total_reproduced: number;
+            total_audits: number;
+            hardware_bom_papers: number;
+            pending_count?: number;
+            my_submissions_count?: number;
+        }>('/research/stats/');
+    }
+
+    // Document & Media Upload
+    async uploadDocument(file: File) {
+        const formData = new FormData();
+        formData.append('file', file);
+        return this.request<{
+            url: string;
+            original_filename: string;
+            file_size_bytes: number;
+            file_type: string;
+        }>('/uploads/document/', {
+            method: 'POST',
+            body: formData,
+        });
+    }
+
+    // Engineering Resources endpoints
+    async getResources(params?: {
+        category?: string;
+        file_type?: string;
+        search?: string;
+        ordering?: string;
+        tab?: string;
+        status?: string;
+    }) {
+        const searchParams = new URLSearchParams();
+        if (params?.category && params.category !== 'ALL') searchParams.set('category', params.category);
+        if (params?.file_type && params.file_type !== 'ALL') searchParams.set('file_type', params.file_type);
+        if (params?.search) searchParams.set('search', params.search);
+        if (params?.ordering) searchParams.set('ordering', params.ordering);
+        if (params?.tab) searchParams.set('tab', params.tab);
+        if (params?.status) searchParams.set('status', params.status);
+
+        const query = searchParams.toString();
+        const url = query ? `/resources/?${query}` : '/resources/';
+        return this.request<any>(url);
+    }
+
+    async getResource(slug: string) {
+        return this.request<any>(`/resources/${slug}/`);
+    }
+
+    async createResource(data: {
+        title: string;
+        description: string;
+        category: string;
+        file_type: string;
+        file_url?: string;
+        file_size_bytes?: number;
+        original_filename?: string;
+        external_link?: string;
+        tags?: string[];
+    }) {
+        return this.request<any>('/resources/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async approveResource(slug: string) {
+        return this.request<any>(`/resources/${slug}/approve/`, {
+            method: 'POST',
+        });
+    }
+
+    async rejectResource(slug: string, reason?: string) {
+        return this.request<any>(`/resources/${slug}/reject/`, {
+            method: 'POST',
+            body: JSON.stringify({ reason: reason || '' }),
+        });
+    }
+
+    async downloadResource(slug: string) {
+        return this.request<{ download_url: string; downloads_count: number }>(`/resources/${slug}/download/`, {
+            method: 'POST',
+        });
+    }
+
+    async getResourceStats() {
+        return this.request<{
+            total_resources: number;
+            total_downloads: number;
+            pending_count: number;
+            my_submissions_count: number;
+        }>('/resources/stats/');
+    }
+
+    // Platform Updates & Engineering Dispatches
+    async getPlatformUpdates(params: { category?: string; search?: string } = {}) {
+        const query = new URLSearchParams();
+        if (params.category && params.category !== 'all') {
+            query.append('category', params.category);
+        }
+        if (params.search) {
+            query.append('search', params.search);
+        }
+        const qs = query.toString();
+        return this.request<any[]>(`/updates/${qs ? `?${qs}` : ''}`);
+    }
+
+    async getPlatformUpdate(slugOrId: string) {
+        return this.request<any>(`/updates/${slugOrId}/`);
+    }
+
+    async createPlatformUpdate(data: {
+        title: string;
+        category: string;
+        summary: string;
+        content: string;
+        cover_image?: string;
+        media_urls?: string[];
+        documents?: Array<{
+            name: string;
+            url: string;
+            file_format?: string;
+            file_size_bytes?: number;
+        }>;
+        external_links?: Array<{
+            title: string;
+            url: string;
+        }>;
+        is_pinned?: boolean;
+        is_published?: boolean;
+    }) {
+        return this.request<any>('/updates/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updatePlatformUpdate(slugOrId: string, data: Partial<{
+        title: string;
+        category: string;
+        summary: string;
+        content: string;
+        cover_image?: string;
+        media_urls?: string[];
+        documents?: any[];
+        external_links?: any[];
+        is_pinned?: boolean;
+        is_published?: boolean;
+    }>) {
+        return this.request<any>(`/updates/${slugOrId}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async deletePlatformUpdate(slugOrId: string) {
+        return this.request<void>(`/updates/${slugOrId}/`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getPlatformUpdateCategories() {
+        return this.request<Array<{ value: string; label: string }>>('/updates/categories/');
+    }
+
+    async getPlatformUpdateStats() {
+        return this.request<{
+            total_count: number;
+            pinned_count: number;
+            category_counts: Record<string, number>;
+        }>('/updates/stats/');
+    }
 }
 
 
 export const api = new ApiClient(API_BASE_URL);
+
+

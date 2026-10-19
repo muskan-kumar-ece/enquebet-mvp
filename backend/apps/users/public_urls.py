@@ -28,6 +28,7 @@ urlpatterns = [
     path('<uuid:target_user_id>/following/', views.FollowingListView.as_view(), name='following_list'),
     path('<uuid:target_user_id>/follow/', views.FollowUserView.as_view(), name='follow_user'),
     path('<uuid:target_user_id>/unfollow/', views.UnfollowUserView.as_view(), name='unfollow_user'),
+    path('<uuid:follower_id>/remove-follower/', views.RemoveFollowerView.as_view(), name='remove_follower'),
 
     path('<uuid:pk>/', views.UserByIdView.as_view(), name='user_by_id'),
     path('<uuid:user_id>/posts/', UserPostsView.as_view(), name='user_posts'),

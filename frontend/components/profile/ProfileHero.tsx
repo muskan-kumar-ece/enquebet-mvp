@@ -30,6 +30,10 @@ interface ProfileHeroProps {
     onFollowToggle?: () => void;
     onOpenEdit?: () => void;
     onExportPdf?: () => void;
+    postsCount?: number;
+    followersCount?: number;
+    followingCount?: number;
+    onOpenFollowModal?: (tab: 'followers' | 'following') => void;
 }
 
 const AVAILABILITY_CONFIG: Record<string, { label: string; dotColor: string; badgeClass: string }> = {
@@ -67,7 +71,11 @@ export default function ProfileHero({
     isFollowing = false,
     onFollowToggle,
     onOpenEdit,
-    onExportPdf
+    onExportPdf,
+    postsCount,
+    followersCount,
+    followingCount,
+    onOpenFollowModal
 }: ProfileHeroProps) {
     const [copied, setCopied] = useState(false);
 
@@ -89,9 +97,9 @@ export default function ProfileHero({
     const approvedDeliverablesCount = reputation?.verified_stats?.approved_deliverables_count || 0;
 
     return (
-        <div className="relative w-full rounded-3xl border border-white/[0.08] bg-[#0c0c14]/90 backdrop-blur-xl overflow-hidden shadow-2xl mb-8">
+        <div className="relative w-full rounded-2xl border border-[#1e2230] bg-[#0d1017] overflow-hidden shadow-sm mb-6">
             {/* Top Cover Mesh Banner */}
-            <div className="relative h-44 sm:h-56 w-full overflow-hidden bg-gradient-to-r from-[#0a0d18] via-[#0f1424] to-[#12182c] border-b border-white/[0.08]">
+            <div className="relative h-44 sm:h-56 w-full overflow-hidden bg-gradient-to-r from-[#0a0d18] via-[#0f1424] to-[#12182c] border-b border-[#1e2230]">
                 {user?.cover_image ? (
                     <img
                         src={user.cover_image}
@@ -103,7 +111,7 @@ export default function ProfileHero({
                 )}
 
                 {/* ENQUEbet Verified Builder Dossier Watermark Seal */}
-                <div className="absolute top-4 right-4 sm:top-5 sm:right-6 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#090b12]/80 backdrop-blur-md border border-white/[0.1] shadow-lg select-none">
+                <div className="absolute top-4 right-4 sm:top-5 sm:right-6 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#090b12]/90 backdrop-blur-md border border-[#23283a] shadow-lg select-none">
                     <BrandMarkSvg size={20} />
                     <div className="flex flex-col text-left">
                         <span className="text-[10px] font-bold tracking-tight text-white uppercase font-mono leading-none">
@@ -131,7 +139,7 @@ export default function ProfileHero({
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-16 sm:-mt-20 gap-4 mb-6">
                     {/* Avatar with Presence Ring */}
                     <div className="relative group self-start">
-                        <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl border-4 border-[#0c0c14] overflow-hidden bg-[#161622] shadow-2xl relative">
+                        <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl border-4 border-[#0d1017] overflow-hidden bg-[#161622] shadow-2xl relative">
                             {user?.profile_image ? (
                                 <img
                                     src={user.profile_image}
@@ -300,30 +308,68 @@ export default function ProfileHero({
                             {user.bio}
                         </p>
                     )}
+
+                    {/* Instagram-Style Network Telemetry Row */}
+                    <div className="flex items-center gap-6 sm:gap-8 pt-3 pb-1 text-sm border-t border-[#1e2230]/70">
+                        <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-white text-base font-mono">
+                                {postsCount ?? 0}
+                            </span>
+                            <span className="text-zinc-400 text-xs sm:text-sm font-medium">posts</span>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => onOpenFollowModal?.('followers')}
+                            className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer group focus:outline-none"
+                            title="View Followers"
+                        >
+                            <span className="font-bold text-white text-base font-mono group-hover:text-[#4f8fff] transition-colors">
+                                {followersCount ?? user?.followers_count ?? 0}
+                            </span>
+                            <span className="text-zinc-400 group-hover:text-zinc-200 text-xs sm:text-sm font-medium">
+                                followers
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => onOpenFollowModal?.('following')}
+                            className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer group focus:outline-none"
+                            title="View Following"
+                        >
+                            <span className="font-bold text-white text-base font-mono group-hover:text-[#4f8fff] transition-colors">
+                                {followingCount ?? user?.following_count ?? 0}
+                            </span>
+                            <span className="text-zinc-400 group-hover:text-zinc-200 text-xs sm:text-sm font-medium">
+                                following
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Telemetry KPI Cards Bar */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/[0.06]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-[#1e2230]">
                     {/* Tier Card */}
-                    <div className="p-3.5 rounded-2xl bg-[#12121c]/80 border border-white/[0.06] flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#1864ff]/10 border border-[#1864ff]/20 flex items-center justify-center text-[#4f8fff] shrink-0">
-                            <Award className="w-5 h-5" />
+                    <div className="p-3.5 rounded-xl bg-[#141824] border border-[#23283a] flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-[#1864ff]/10 border border-[#1864ff]/20 flex items-center justify-center text-[#4f8fff] shrink-0">
+                            <Award className="w-4 h-4" />
                         </div>
                         <div>
-                            <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Tier</div>
-                            <div className="text-sm font-bold text-zinc-100 truncate">{tierTitle}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Tier</div>
+                            <div className="text-xs font-bold text-zinc-100 truncate">{tierTitle}</div>
                             <div className="text-[11px] font-mono text-[#4f8fff]">{repScore} Rep PTS</div>
                         </div>
                     </div>
 
                     {/* Peer Rating */}
-                    <div className="p-3.5 rounded-2xl bg-[#12121c]/80 border border-white/[0.06] flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                            <Star className="w-5 h-5 fill-amber-400" />
+                    <div className="p-3.5 rounded-xl bg-[#141824] border border-[#23283a] flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                            <Star className="w-4 h-4 fill-amber-400" />
                         </div>
                         <div>
-                            <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Teammate Rating</div>
-                            <div className="text-sm font-bold text-zinc-100">
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Teammate Rating</div>
+                            <div className="text-xs font-bold text-zinc-100">
                                 {avgRating > 0 ? `${avgRating} / 5.0` : 'Unrated'}
                             </div>
                             <div className="text-[11px] text-zinc-400">{peerReviewsCount} Verified Reviews</div>
@@ -331,25 +377,25 @@ export default function ProfileHero({
                     </div>
 
                     {/* Proofs & Projects */}
-                    <div className="p-3.5 rounded-2xl bg-[#12121c]/80 border border-white/[0.06] flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                            <ShieldCheck className="w-5 h-5" />
+                    <div className="p-3.5 rounded-xl bg-[#141824] border border-[#23283a] flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                            <ShieldCheck className="w-4 h-4" />
                         </div>
                         <div>
-                            <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Delivered PoWs</div>
-                            <div className="text-sm font-bold text-zinc-100">{completedProjectsCount} Projects</div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Delivered PoWs</div>
+                            <div className="text-xs font-bold text-zinc-100">{completedProjectsCount} Projects</div>
                             <div className="text-[11px] text-zinc-400">Minted Proof of Work</div>
                         </div>
                     </div>
 
                     {/* Approved Deliverables */}
-                    <div className="p-3.5 rounded-2xl bg-[#12121c]/80 border border-white/[0.06] flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
-                            <Sparkles className="w-5 h-5" />
+                    <div className="p-3.5 rounded-xl bg-[#141824] border border-[#23283a] flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                            <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
-                            <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">Deliverables</div>
-                            <div className="text-sm font-bold text-zinc-100">{approvedDeliverablesCount} Approved</div>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Deliverables</div>
+                            <div className="text-xs font-bold text-zinc-100">{approvedDeliverablesCount} Approved</div>
                             <div className="text-[11px] text-zinc-400">Shipped on Milestones</div>
                         </div>
                     </div>

@@ -49,6 +49,8 @@ urlpatterns = [
     path('api/v1/uploads/', include('apps.uploads.urls')),
     path('api/v1/contributions/', include('apps.contributions.urls')),
     path('api/v1/research/', include('apps.research.urls')),
+    path('api/v1/resources/', include('apps.resources.urls')),
+    path('api/v1/updates/', include('apps.updates.urls')),
 
     # Spec-friendly aliases (information.md uses /api/...)
     path('api/auth/', include('apps.users.urls')),
@@ -63,6 +65,8 @@ urlpatterns = [
     path('api/uploads/', include('apps.uploads.urls')),
     path('api/contributions/', include('apps.contributions.urls')),
     path('api/research/', include('apps.research.urls')),
+    path('api/resources/', include('apps.resources.urls')),
+    path('api/updates/', include('apps.updates.urls')),
 ]
 
 if settings.DEBUG:

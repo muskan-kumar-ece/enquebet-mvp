@@ -1,6 +1,7 @@
 """
 User Views (Auth + Profile)
 """
+import uuid
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status, generics
@@ -173,10 +174,16 @@ class UserDetailView(generics.RetrieveAPIView):
 
 
 class UserByIdView(generics.RetrieveAPIView):
-    """Get user profile by UUID — used by frontend /users/:id/"""
-    queryset = User.objects.all()
+    """Get user profile by UUID or username — used by frontend /users/:id/"""
     serializer_class = UserSerializer
-    lookup_field = 'pk'
+
+    def get_object(self):
+        val = self.kwargs.get('pk')
+        try:
+            val_uuid = uuid.UUID(str(val))
+            return get_object_or_404(User, id=val_uuid)
+        except (ValueError, AttributeError):
+            return get_object_or_404(User, username=val)
 
 
 class UserSearchView(generics.ListAPIView):
@@ -359,7 +366,7 @@ class UnfollowUserView(APIView):
 
 
 class FollowersListView(APIView):
-    """List followers for a user."""
+    """List followers for a user with pre-calculated follow statuses."""
 
     permission_classes = [IsAuthenticated]
 
@@ -369,19 +376,29 @@ class FollowersListView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        follower_ids = (
+        follower_ids = list(
             Follower.objects.filter(following=target_user)
-            .select_related('follower')
             .order_by('-created_at')
             .values_list('follower_id', flat=True)
         )
-        qs = User.objects.filter(id__in=list(follower_ids))
-        data = UserSerializer(qs, many=True, context={'request': request}).data
+        users_map = {u.id: u for u in User.objects.filter(id__in=follower_ids)}
+        ordered_users = [users_map[uid] for uid in follower_ids if uid in users_map]
+
+        followed_user_ids = set(
+            Follower.objects.filter(follower=request.user)
+            .values_list('following_id', flat=True)
+        )
+
+        data = UserSerializer(
+            ordered_users,
+            many=True,
+            context={'request': request, 'followed_user_ids': followed_user_ids}
+        ).data
         return Response({'count': len(data), 'results': data})
 
 
 class FollowingListView(APIView):
-    """List who a user is following."""
+    """List who a user is following with pre-calculated follow statuses."""
 
     permission_classes = [IsAuthenticated]
 
@@ -391,15 +408,57 @@ class FollowingListView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        following_ids = (
+        following_ids = list(
             Follower.objects.filter(follower=target_user)
-            .select_related('following')
             .order_by('-created_at')
             .values_list('following_id', flat=True)
         )
-        qs = User.objects.filter(id__in=list(following_ids))
-        data = UserSerializer(qs, many=True, context={'request': request}).data
+        users_map = {u.id: u for u in User.objects.filter(id__in=following_ids)}
+        ordered_users = [users_map[uid] for uid in following_ids if uid in users_map]
+
+        followed_user_ids = set(
+            Follower.objects.filter(follower=request.user)
+            .values_list('following_id', flat=True)
+        )
+
+        data = UserSerializer(
+            ordered_users,
+            many=True,
+            context={'request': request, 'followed_user_ids': followed_user_ids}
+        ).data
         return Response({'count': len(data), 'results': data})
+
+
+class RemoveFollowerView(APIView):
+    """Remove a follower from following the current user (Instagram-style)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, follower_id):
+        try:
+            follower_user = User.objects.get(id=follower_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if follower_user == request.user:
+            return Response({'error': 'You cannot remove yourself'}, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted_count, _ = Follower.objects.filter(
+            follower=follower_user,
+            following=request.user
+        ).delete()
+
+        if deleted_count == 0:
+            return Response({'error': 'This user is not following you'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'removed': True,
+            'follower_id': str(follower_id),
+            'followers_count': request.user.followers.count(),
+        })
+
+    def delete(self, request, follower_id):
+        return self.post(request, follower_id)
 
 
 class FollowStatusView(APIView):
@@ -775,12 +834,28 @@ class UserDossierPreferencesView(APIView):
             else:
                 return Response({'error': 'pinned_proof_ids must be a list of UUID strings'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user.save(update_fields=['availability_status', 'headline', 'pinned_proof_ids'])
+        fields_to_update = ['availability_status', 'headline', 'pinned_proof_ids']
+
+        if 'collaboration_preferences' in request.data:
+            prefs = request.data['collaboration_preferences']
+            if isinstance(prefs, list):
+                user.collaboration_preferences = prefs
+                fields_to_update.append('collaboration_preferences')
+            elif isinstance(prefs, str):
+                import json
+                try:
+                    user.collaboration_preferences = json.loads(prefs)
+                    fields_to_update.append('collaboration_preferences')
+                except Exception:
+                    pass
+
+        user.save(update_fields=fields_to_update)
         return Response({
             'message': 'Dossier preferences updated',
             'availability_status': user.availability_status,
             'headline': user.headline,
             'pinned_proof_ids': user.pinned_proof_ids,
+            'collaboration_preferences': user.collaboration_preferences,
         })
 
 

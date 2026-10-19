@@ -117,3 +117,118 @@ class ImageUploadView(APIView):
                 {'error': f'Image upload failed: {exc}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+# Maximum document upload size: 50 MB
+MAX_DOC_UPLOAD_BYTES = 50 * 1024 * 1024
+
+ALLOWED_DOC_EXTENSIONS = {
+    '.pdf', '.docx', '.doc', '.txt', '.md', '.pptx', '.ppt', '.zip', '.tar.gz', '.epub'
+}
+
+
+class DocumentUploadView(APIView):
+    """Upload technical books, Word/PDF docs, slides, text files, and code archives.
+
+    POST /api/v1/uploads/document/
+    Body: multipart/form-data { file: <document> }
+    Returns: { url: "...", original_filename: "...", file_size_bytes: ..., file_type: "PDF" }
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response(
+                {'error': 'No document file provided. Send a file in the "file" field.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        original_name = getattr(file_obj, 'name', '') or 'document'
+        ext = ''
+        if '.' in original_name:
+            ext = '.' + original_name.rsplit('.', 1)[-1].lower()
+
+        if ext not in ALLOWED_DOC_EXTENSIONS:
+            allowed_list = ', '.join(sorted(ALLOWED_DOC_EXTENSIONS))
+            return Response(
+                {'error': f"Unsupported file extension '{ext}'. Allowed: {allowed_list}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if file_obj.size > MAX_DOC_UPLOAD_BYTES:
+            max_mb = MAX_DOC_UPLOAD_BYTES // (1024 * 1024)
+            return Response(
+                {'error': f"File exceeds maximum limit of {max_mb} MB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Map extension to resource file type
+        ext_clean = ext.lstrip('.').lower()
+        type_mapping = {
+            'pdf': 'PDF',
+            'docx': 'DOCX',
+            'doc': 'DOCX',
+            'txt': 'TXT',
+            'md': 'MARKDOWN',
+            'epub': 'EPUB',
+            'pptx': 'PPTX',
+            'ppt': 'PPTX',
+            'zip': 'ZIP',
+            'tar.gz': 'ZIP',
+        }
+        resource_file_type = type_mapping.get(ext_clean, 'PDF')
+
+        folder = request.data.get('folder', 'enquebet/resources')
+
+        # --- Cloudinary Upload (resource_type='raw') ---
+        if _cloudinary_available():
+            try:
+                import cloudinary.uploader
+
+                result = cloudinary.uploader.upload(
+                    file_obj,
+                    resource_type='raw',
+                    folder=folder,
+                    use_filename=True,
+                    unique_filename=True,
+                )
+                secure_url = result.get('secure_url')
+                if not secure_url:
+                    raise ValueError('Cloudinary returned no secure_url for raw upload')
+
+                return Response({
+                    'url': secure_url,
+                    'original_filename': original_name,
+                    'file_size_bytes': file_obj.size,
+                    'file_type': resource_file_type,
+                }, status=status.HTTP_201_CREATED)
+
+            except Exception as exc:
+                logger.error('Cloudinary document upload failed: %s', exc, exc_info=True)
+                # Fall through to local storage if Cloudinary fails
+
+        # --- Local Storage Fallback ---
+        try:
+            import re
+            safe_name = re.sub(r'[^a-zA-Z0-9_\.-]', '_', original_name)
+            filename = f"resources/{uuid.uuid4().hex[:12]}_{safe_name}"
+            saved_name = default_storage.save(filename, file_obj)
+            url = request.build_absolute_uri(settings.MEDIA_URL + saved_name)
+
+            return Response({
+                'url': url,
+                'original_filename': original_name,
+                'file_size_bytes': file_obj.size,
+                'file_type': resource_file_type,
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as exc:
+            logger.error('Local document upload failed: %s', exc, exc_info=True)
+            return Response(
+                {'error': f'Document upload failed: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+

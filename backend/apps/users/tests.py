@@ -456,3 +456,43 @@ class SettingsAndSecurityTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(User.objects.filter(id=self.user.id).exists())
 
+    def test_follower_following_and_remove_follower(self):
+        # Create user Charlie
+        charlie = User.objects.create_user(
+            email='charlie@example.com',
+            username='charlie',
+            password='SecurePassword123!'
+        )
+
+        # Charlie follows self.user (Alice)
+        Follower.objects.create(follower=charlie, following=self.user)
+        self.assertEqual(self.user.followers.count(), 1)
+
+        # Alice authenticates and views her followers
+        self.client.force_authenticate(user=self.user)
+        res = self.client.get(f'/api/v1/users/{self.user.id}/followers/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['count'], 1)
+        # Charlie is in results, and is_following is False (Alice does not follow Charlie yet)
+        self.assertEqual(res.data['results'][0]['username'], 'charlie')
+        self.assertFalse(res.data['results'][0]['is_following'])
+
+        # Alice follows Charlie back
+        Follower.objects.create(follower=self.user, following=charlie)
+
+        # Now when Alice checks her followers, is_following should be True (mutual follow)
+        res = self.client.get(f'/api/v1/users/{self.user.id}/followers/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['results'][0]['is_following'])
+
+        # Alice removes Charlie from her followers (Instagram-style remove follower)
+        remove_res = self.client.post(f'/api/v1/users/{charlie.id}/remove-follower/')
+        self.assertEqual(remove_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(remove_res.data['removed'])
+        self.assertEqual(remove_res.data['followers_count'], 0)
+
+        # Charlie should no longer follow Alice
+        self.assertFalse(Follower.objects.filter(follower=charlie, following=self.user).exists())
+        # But Alice still follows Charlie
+        self.assertTrue(Follower.objects.filter(follower=self.user, following=charlie).exists())
+

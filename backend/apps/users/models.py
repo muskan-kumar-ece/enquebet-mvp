@@ -44,6 +44,8 @@ class User(AbstractUser):
     education = models.JSONField(default=list, blank=True)
     projects = models.JSONField(default=list, blank=True)
     experience = models.JSONField(default=list, blank=True)
+    certifications = models.JSONField(default=list, blank=True)
+    collaboration_preferences = models.JSONField(default=list, blank=True)
     resume_file = models.FileField(upload_to='resumes/', blank=True, null=True)
     linkedin_url = models.URLField(max_length=500, blank=True, default='')
     github_url = models.URLField(max_length=500, blank=True, default='')

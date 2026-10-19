@@ -34,25 +34,40 @@ export default function PeerEndorsementWall({
 }: PeerEndorsementWallProps) {
     if (!endorsements || endorsements.length === 0) {
         return (
-            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#0c0c14]/90 backdrop-blur-xl p-8 mb-8 text-center shadow-xl">
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 mx-auto mb-4">
-                    <Star className="w-7 h-7 fill-amber-400/20" />
+            <div className="w-full rounded-2xl border border-[#1e2230] bg-[#0d1017] p-5 mb-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#141824] border border-[#23283a] flex items-center justify-center text-amber-400 shrink-0">
+                            <Star className="w-5 h-5 fill-amber-400/20" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-white">No Peer Endorsements Yet</h3>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                                Teammate reviews on ENQUEbet are unlocked strictly by verified collaborators upon completing workspace deliverables.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="self-start sm:self-center shrink-0">
+                        <Link
+                            href="/collaboration"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141824] hover:bg-[#1a2030] text-zinc-200 border border-[#23283a] text-xs font-semibold transition-colors"
+                        >
+                            <span>Browse Workspaces</span>
+                            <ArrowUpRight className="w-3.5 h-3.5 text-[#1864ff]" />
+                        </Link>
+                    </div>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">No Peer Endorsements Yet</h3>
-                <p className="text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-                    Peer reviews on ENQUEbet cannot be faked or click-traded. They are unlocked strictly by teammates upon completing real workspace deliverables.
-                </p>
             </div>
         );
     }
 
     return (
-        <div className="w-full mb-8">
+        <div className="w-full mb-6">
             <div className="flex items-center justify-between mb-4 px-1">
-                <div className="flex items-center gap-2.5">
-                    <Star className="w-5 h-5 text-amber-400 fill-amber-400/20" />
-                    <h2 className="text-lg font-bold text-white tracking-tight">Verified Teammate Endorsements</h2>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono font-medium">
+                <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+                    <h2 className="text-base font-bold text-white tracking-tight">Verified Teammate Endorsements</h2>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 font-mono font-medium">
                         {totalCount || endorsements.length} Workspace Vouches
                     </span>
                 </div>
@@ -68,7 +83,7 @@ export default function PeerEndorsementWall({
                     return (
                         <div
                             key={review.id}
-                            className="rounded-2xl border border-white/[0.08] bg-[#0f0f18]/90 backdrop-blur-xl p-5 hover:border-white/20 transition-all flex flex-col justify-between"
+                            className="rounded-2xl border border-[#1e2230] bg-[#0d1017] hover:border-[#2e364f] p-5 transition-all flex flex-col justify-between shadow-sm"
                         >
                             {/* Reviewer Header */}
                             <div>

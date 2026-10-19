@@ -20,16 +20,26 @@ const AVAILABILITY_OPTIONS = [
     { value: 'focused', label: 'Deep Focus Mode', desc: 'Heads-down building current venture, low bandwidth' }
 ];
 
+const COLLAB_PREFERENCE_OPTIONS = [
+    'AI Systems & Models',
+    'Open Source Ventures',
+    'Full-Stack Architecture',
+    'Robotics & Hardware / BOM',
+    'Campus Hackathons',
+    'Contract Engineering'
+];
+
 export default function EditDossierModal({ isOpen, onClose, user, onSaved }: EditDossierModalProps) {
     const [availabilityStatus, setAvailabilityStatus] = useState(user?.availability_status || 'open_to_collaborate');
     const [headline, setHeadline] = useState(user?.headline || '');
     const [pinnedProofIds, setPinnedProofIds] = useState<string[]>(user?.pinned_proof_ids || []);
+    const [collaborationPreferences, setCollaborationPreferences] = useState<string[]>(user?.collaboration_preferences || []);
     const [availableProofs, setAvailableProofs] = useState<any[]>([]);
     const [loadingProofs, setLoadingProofs] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Form tab: 'dossier' | 'add_experience' | 'add_education'
-    const [activeTab, setActiveTab] = useState<'dossier' | 'add_experience' | 'add_education'>('dossier');
+    // Form tab: 'dossier' | 'add_experience' | 'add_education' | 'add_project' | 'add_certification'
+    const [activeTab, setActiveTab] = useState<'dossier' | 'add_experience' | 'add_education' | 'add_project' | 'add_certification'>('dossier');
 
     // Experience form state
     const [expCompany, setExpCompany] = useState('');
@@ -49,11 +59,29 @@ export default function EditDossierModal({ isOpen, onClose, user, onSaved }: Edi
     const [eduStartYear, setEduStartYear] = useState('');
     const [eduEndYear, setEduEndYear] = useState('');
 
+    // Project form state
+    const [projTitle, setProjTitle] = useState('');
+    const [projDesc, setProjDesc] = useState('');
+    const [projRole, setProjRole] = useState('');
+    const [projTechStack, setProjTechStack] = useState('');
+    const [projType, setProjType] = useState<'personal' | 'collaborative' | 'verified_pow'>('personal');
+    const [projLiveUrl, setProjLiveUrl] = useState('');
+    const [projRepoUrl, setProjRepoUrl] = useState('');
+    const [projPowCode, setProjPowCode] = useState('');
+
+    // Certification form state
+    const [certName, setCertName] = useState('');
+    const [certIssuer, setCertIssuer] = useState('');
+    const [certDate, setCertDate] = useState('');
+    const [certUrl, setCertUrl] = useState('');
+    const [certId, setCertId] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             setAvailabilityStatus(user?.availability_status || 'open_to_collaborate');
             setHeadline(user?.headline || '');
             setPinnedProofIds(user?.pinned_proof_ids || []);
+            setCollaborationPreferences(user?.collaboration_preferences || []);
             fetchAvailableProofs();
         }
     }, [isOpen, user]);
@@ -90,13 +118,95 @@ export default function EditDossierModal({ isOpen, onClose, user, onSaved }: Edi
             await api.updateDossierPreferences({
                 availability_status: availabilityStatus,
                 headline: headline.trim(),
-                pinned_proof_ids: pinnedProofIds
+                pinned_proof_ids: pinnedProofIds,
+                collaboration_preferences: collaborationPreferences
             });
             toast.success('Dossier updated successfully!');
             onSaved();
             onClose();
         } catch (err: any) {
             toast.error(err.message || 'Failed to update dossier');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const toggleCollabPreference = (pref: string) => {
+        if (collaborationPreferences.includes(pref)) {
+            setCollaborationPreferences(collaborationPreferences.filter((p) => p !== pref));
+        } else {
+            setCollaborationPreferences([...collaborationPreferences, pref]);
+        }
+    };
+
+    const handleCreateProject = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!projTitle.trim()) {
+            toast.error('Project title is required');
+            return;
+        }
+        setSaving(true);
+        try {
+            const currentProjects = Array.isArray(user?.projects) ? [...user.projects] : [];
+            const newProj = {
+                id: String(Date.now()),
+                title: projTitle.trim(),
+                description: projDesc.trim(),
+                role: projRole.trim() || undefined,
+                tech_stack: projTechStack.split(',').map((s) => s.trim()).filter(Boolean),
+                project_type: projType,
+                live_url: projLiveUrl.trim() || undefined,
+                repo_url: projRepoUrl.trim() || undefined,
+                linked_pow_code: projPowCode.trim() || undefined,
+            };
+            currentProjects.unshift(newProj);
+            await api.updateProfile({ projects: currentProjects });
+            toast.success('Project added to showcase!');
+            setProjTitle('');
+            setProjDesc('');
+            setProjRole('');
+            setProjTechStack('');
+            setProjLiveUrl('');
+            setProjRepoUrl('');
+            setProjPowCode('');
+            setActiveTab('dossier');
+            onSaved();
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to add project');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCreateCertification = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!certName.trim() || !certIssuer.trim()) {
+            toast.error('Certificate name and issuer are required');
+            return;
+        }
+        setSaving(true);
+        try {
+            const currentCerts = Array.isArray(user?.certifications) ? [...user.certifications] : [];
+            const newCert = {
+                id: String(Date.now()),
+                name: certName.trim(),
+                issuer: certIssuer.trim(),
+                issue_date: certDate.trim() || undefined,
+                credential_url: certUrl.trim() || undefined,
+                credential_id: certId.trim() || undefined,
+            };
+            currentCerts.unshift(newCert);
+            await api.updateProfile({ certifications: currentCerts });
+            toast.success('Certification added!');
+            setCertName('');
+            setCertIssuer('');
+            setCertDate('');
+            setCertUrl('');
+            setCertId('');
+            setActiveTab('dossier');
+            onSaved();
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to add certification');
         } finally {
             setSaving(false);
         }
@@ -178,54 +288,74 @@ export default function EditDossierModal({ isOpen, onClose, user, onSaved }: Edi
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="w-full max-w-2xl rounded-3xl border border-white/[0.1] bg-[#0c0c16] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="w-full max-w-2xl rounded-2xl border border-[#1e2230] bg-[#0d1017] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.08]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2230]">
                     <div>
-                        <h2 className="text-lg font-bold text-white tracking-tight">Edit Builder Dossier</h2>
+                        <h2 className="text-base font-bold text-white tracking-tight">Edit Builder Dossier</h2>
                         <p className="text-xs text-zinc-400 mt-0.5">
-                            Manage availability beacon, headline, and pinned cryptographic Proofs of Work.
+                            Manage availability, preferences, pinned Proof of Work, projects, and credentials.
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                        className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-[#141824] transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Sub-nav Tabs */}
-                <div className="flex border-b border-border px-6 gap-6 text-sm">
+                <div className="flex overflow-x-auto border-b border-[#1e2230] px-6 gap-5 text-xs">
                     <button
                         onClick={() => setActiveTab('dossier')}
-                        className={`py-3 font-semibold border-b-2 transition-colors ${
+                        className={`py-3 font-semibold border-b-2 whitespace-nowrap transition-colors ${
                             activeTab === 'dossier'
-                                ? 'border-brand text-white'
+                                ? 'border-[#1864ff] text-white'
                                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
                         }`}
                     >
                         Preferences & Pins
                     </button>
                     <button
-                        onClick={() => setActiveTab('add_experience')}
-                        className={`py-3 font-semibold border-b-2 transition-colors ${
-                            activeTab === 'add_experience'
-                                ? 'border-brand text-white'
+                        onClick={() => setActiveTab('add_project')}
+                        className={`py-3 font-semibold border-b-2 whitespace-nowrap transition-colors ${
+                            activeTab === 'add_project'
+                                ? 'border-[#1864ff] text-white'
                                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
                         }`}
                     >
-                        + Add Experience
+                        + Add Project
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('add_experience')}
+                        className={`py-3 font-semibold border-b-2 whitespace-nowrap transition-colors ${
+                            activeTab === 'add_experience'
+                                ? 'border-[#1864ff] text-white'
+                                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                        }`}
+                    >
+                        + Add Role
                     </button>
                     <button
                         onClick={() => setActiveTab('add_education')}
-                        className={`py-3 font-semibold border-b-2 transition-colors ${
+                        className={`py-3 font-semibold border-b-2 whitespace-nowrap transition-colors ${
                             activeTab === 'add_education'
-                                ? 'border-brand text-white'
+                                ? 'border-[#1864ff] text-white'
                                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
                         }`}
                     >
                         + Add Education
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('add_certification')}
+                        className={`py-3 font-semibold border-b-2 whitespace-nowrap transition-colors ${
+                            activeTab === 'add_certification'
+                                ? 'border-[#1864ff] text-white'
+                                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                        }`}
+                    >
+                        + Add Certificate
                     </button>
                 </div>
 
@@ -280,6 +410,35 @@ export default function EditDossierModal({ isOpen, onClose, user, onSaved }: Edi
                                             </div>
                                         </label>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Collaboration Preferences */}
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                                    Collaboration Preferences
+                                </label>
+                                <p className="text-xs text-zinc-400 mb-2.5">
+                                    Select the engineering domains and project types you are interested in collaborating on.
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {COLLAB_PREFERENCE_OPTIONS.map((pref) => {
+                                        const isSelected = collaborationPreferences.includes(pref);
+                                        return (
+                                            <button
+                                                key={pref}
+                                                type="button"
+                                                onClick={() => toggleCollabPreference(pref)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                                    isSelected
+                                                        ? 'bg-[#1864ff]/20 border-[#1864ff] text-white'
+                                                        : 'bg-[#141824] border-[#23283a] text-zinc-400 hover:text-zinc-200 hover:border-[#333b54]'
+                                                }`}
+                                            >
+                                                {isSelected ? '✓ ' : '+ '}{pref}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -556,11 +715,234 @@ export default function EditDossierModal({ isOpen, onClose, user, onSaved }: Edi
                             </div>
                         </form>
                     )}
+
+                    {/* Add Project Form */}
+                    {activeTab === 'add_project' && (
+                        <form onSubmit={handleCreateProject} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                    Project Title *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={projTitle}
+                                    onChange={(e) => setProjTitle(e.target.value)}
+                                    placeholder="e.g. Distributed Consensus Engine"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                    Description *
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    required
+                                    value={projDesc}
+                                    onChange={(e) => setProjDesc(e.target.value)}
+                                    placeholder="Summary of what was built, architecture, and impact."
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff] resize-none"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Your Role
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={projRole}
+                                        onChange={(e) => setProjRole(e.target.value)}
+                                        placeholder="e.g. Lead Architect / Core Developer"
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Project Type
+                                    </label>
+                                    <select
+                                        value={projType}
+                                        onChange={(e: any) => setProjType(e.target.value)}
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    >
+                                        <option value="personal">Personal Project</option>
+                                        <option value="collaborative">Collaborative Venture</option>
+                                        <option value="verified_pow">Verified Proof of Work</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                    Tech Stack (comma-separated)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={projTechStack}
+                                    onChange={(e) => setProjTechStack(e.target.value)}
+                                    placeholder="Next.js, Python, PostgreSQL, PyTorch"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        GitHub / Repo URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={projRepoUrl}
+                                        onChange={(e) => setProjRepoUrl(e.target.value)}
+                                        placeholder="https://github.com/..."
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Live Demo URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={projLiveUrl}
+                                        onChange={(e) => setProjLiveUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                    Linked Proof of Work Code (optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={projPowCode}
+                                    onChange={(e) => setProjPowCode(e.target.value)}
+                                    placeholder="e.g. ENQ-2026-XXXX"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff] font-mono"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('dossier')}
+                                    className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="px-5 py-2 rounded-xl bg-[#1864ff] hover:bg-[#2563eb] text-white text-xs font-semibold"
+                                >
+                                    {saving ? 'Adding...' : 'Save Project'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {/* Add Certification Form */}
+                    {activeTab === 'add_certification' && (
+                        <form onSubmit={handleCreateCertification} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                    Certification / License Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={certName}
+                                    onChange={(e) => setCertName(e.target.value)}
+                                    placeholder="e.g. AWS Certified Solutions Architect"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Issuing Organization *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={certIssuer}
+                                        onChange={(e) => setCertIssuer(e.target.value)}
+                                        placeholder="e.g. Amazon Web Services / Coursera"
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Issue Date / Year
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={certDate}
+                                        onChange={(e) => setCertDate(e.target.value)}
+                                        placeholder="e.g. Oct 2025"
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Credential URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={certUrl}
+                                        onChange={(e) => setCertUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                                        Credential ID (optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={certId}
+                                        onChange={(e) => setCertId(e.target.value)}
+                                        placeholder="e.g. AWS-839210"
+                                        className="w-full px-3.5 py-2 rounded-xl bg-[#141824] border border-[#23283a] text-white text-sm focus:outline-none focus:border-[#1864ff]"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('dossier')}
+                                    className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="px-5 py-2 rounded-xl bg-[#1864ff] hover:bg-[#2563eb] text-white text-xs font-semibold"
+                                >
+                                    {saving ? 'Adding...' : 'Save Certificate'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
                 </div>
 
                 {/* Footer for Dossier Preferences */}
                 {activeTab === 'dossier' && (
-                    <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.08] bg-[#090910]">
+                    <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#1e2230] bg-[#090b12]">
                         <button
                             type="button"
                             onClick={onClose}

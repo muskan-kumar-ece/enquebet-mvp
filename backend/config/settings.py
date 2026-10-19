@@ -67,6 +67,8 @@ INSTALLED_APPS = [
     'apps.uploads',
     'apps.contributions',
     'apps.research',
+    'apps.resources',
+    'apps.updates',
 ]
 
 MIDDLEWARE = [

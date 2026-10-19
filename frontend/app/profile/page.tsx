@@ -18,8 +18,12 @@ import {
     Calendar,
     Settings,
     FileText,
-    Sparkles
+    Sparkles,
+    FlaskConical,
+    Cpu,
+    ShieldCheck
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
 import PostCard from '@/components/feed/PostCard';
@@ -28,11 +32,16 @@ import ProfileCompletenessCard from '@/components/ui/ProfileCompletenessCard';
 import FollowersModal from '@/components/ui/FollowersModal';
 import ProfileHero from '@/components/profile/ProfileHero';
 import BuilderHeatmap from '@/components/profile/BuilderHeatmap';
+import FeaturedProjectsSection from '@/components/profile/FeaturedProjectsSection';
 import PinnedProofSection from '@/components/profile/PinnedProofSection';
 import PeerEndorsementWall from '@/components/profile/PeerEndorsementWall';
 import ExperienceTimeline from '@/components/profile/ExperienceTimeline';
 import ReputationRadar from '@/components/profile/ReputationRadar';
 import EditDossierModal from '@/components/profile/EditDossierModal';
+import ProfileCompletionWidget from '@/components/profile/sidebar/ProfileCompletionWidget';
+import SkillsSummaryWidget from '@/components/profile/sidebar/SkillsSummaryWidget';
+import CollaborationPreferencesWidget from '@/components/profile/sidebar/CollaborationPreferencesWidget';
+import DiscoveryRecommendationsWidget from '@/components/profile/sidebar/DiscoveryRecommendationsWidget';
 import toast from 'react-hot-toast';
 
 interface SkillItem {
@@ -46,18 +55,21 @@ export default function ProfilePage() {
     const [dossierLoading, setDossierLoading] = useState(true);
     const [userPosts, setUserPosts] = useState<any[]>([]);
     const [savedPosts, setSavedPosts] = useState<any[]>([]);
+    const [userResearchPapers, setUserResearchPapers] = useState<any[]>([]);
+    const [researchLoading, setResearchLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editDossierOpen, setEditDossierOpen] = useState(false);
     const [editData, setEditData] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
-    const [activeTab, setActiveTab] = useState<'dossier' | 'posts' | 'saved' | 'settings'>('dossier');
+    const [activeTab, setActiveTab] = useState<'dossier' | 'posts' | 'research' | 'saved' | 'settings'>('dossier');
     const [savedLoading, setSavedLoading] = useState(false);
     const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
 
     useEffect(() => {
         if (!authLoading && user) {
             fetchUserPosts();
+            fetchUserResearchPapers();
             fetchDossier();
             setLoading(false);
         }
@@ -67,7 +79,26 @@ export default function ProfilePage() {
         if (activeTab === 'saved' && savedPosts.length === 0 && !savedLoading) {
             fetchSavedPosts();
         }
+        if (activeTab === 'research' && userResearchPapers.length === 0 && !researchLoading) {
+            fetchUserResearchPapers();
+        }
     }, [activeTab]);
+
+    const fetchUserResearchPapers = async () => {
+        if (!user?.id) return;
+        setResearchLoading(true);
+        try {
+            const res = await api.getResearchPapers({ user: user.id.toString() });
+            const list = res?.results || res;
+            if (Array.isArray(list)) {
+                setUserResearchPapers(list);
+            }
+        } catch (err) {
+            console.warn('Could not load user research papers:', err);
+        } finally {
+            setResearchLoading(false);
+        }
+    };
 
     const fetchDossier = async () => {
         setDossierLoading(true);
@@ -122,6 +153,19 @@ export default function ProfilePage() {
             fetchDossier();
         } catch (err: any) {
             toast.error(err.message || 'Failed to remove education');
+        }
+    };
+
+    const handleDeleteCertification = async (id: string) => {
+        try {
+            const currentCerts = Array.isArray(currentUserData?.certifications) ? [...currentUserData.certifications] : [];
+            const updated = currentCerts.filter((c: any) => c.id !== id);
+            await api.updateProfile({ certifications: updated });
+            updateUser({ ...user, certifications: updated });
+            toast.success('Certification removed');
+            fetchDossier();
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to remove certification');
         }
     };
 
@@ -222,7 +266,7 @@ export default function ProfilePage() {
 
     return (
         <div className="min-h-screen p-4 sm:p-6 pb-24 bg-blueprint-grid">
-            <div className="max-w-5xl mx-auto">
+            <div className="w-full max-w-[1520px] mx-auto px-2 sm:px-4 lg:px-6">
                 {/* Hero Header Dock */}
                 <ProfileHero
                     user={currentUserData}
@@ -230,6 +274,10 @@ export default function ProfilePage() {
                     isOwner={true}
                     onOpenEdit={() => setEditDossierOpen(true)}
                     onExportPdf={handlePrintPdf}
+                    postsCount={userPosts.length}
+                    followersCount={currentUserData?.followers_count}
+                    followingCount={currentUserData?.following_count}
+                    onOpenFollowModal={(tab) => setFollowModal(tab)}
                 />
 
                 {/* Primary Tab Switcher */}
@@ -252,7 +300,18 @@ export default function ProfilePage() {
                                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                         }`}
                     >
-                        Your Posts ({userPosts.length})
+                        Posts ({userPosts.length})
+                    </button>
+                    <button
+                        onClick={() => { setActiveTab('research'); setIsEditing(false); }}
+                        className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                            activeTab === 'research'
+                                ? 'bg-[#1864ff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_2px_6px_rgba(0,0,0,0.4)] border border-[#488eff]/50'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                        }`}
+                    >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        <span>Research ({userResearchPapers.length})</span>
                     </button>
                     <button
                         onClick={() => { setActiveTab('saved'); setIsEditing(false); }}
@@ -278,46 +337,59 @@ export default function ProfilePage() {
                     </button>
                 </div>
 
-                {/* Tab Views */}
-                {activeTab === 'dossier' && (
-                    <>
-                        {/* 365-Day Activity Ledger */}
-                        <BuilderHeatmap activity={dossier?.activity} />
+                {/* Adaptive Two-Column Workspace (Main Content + Contextual Sidebar) */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-8 items-start">
+                    {/* Main Content Column */}
+                    <div className="xl:col-span-8 2xl:col-span-9 space-y-6">
+                        {activeTab === 'dossier' && (
+                            <>
+                                {/* 365-Day Activity Ledger */}
+                                <BuilderHeatmap activity={dossier?.activity} />
 
-                        {/* Pinned Proof of Work Bento Cards */}
-                        <PinnedProofSection
-                            proofs={dossier?.pinned_proofs || []}
-                            isOwner={true}
-                            onManagePins={() => setEditDossierOpen(true)}
-                        />
+                                {/* Featured Projects & Ventures Showcase */}
+                                <FeaturedProjectsSection
+                                    projects={currentUserData.projects || []}
+                                    isOwner={true}
+                                    onAddProject={() => setEditDossierOpen(true)}
+                                />
 
-                        {/* Verified Teammate Endorsements Wall */}
-                        <PeerEndorsementWall
-                            endorsements={dossier?.peer_endorsements || []}
-                            averageRating={dossier?.reputation?.verified_stats?.average_peer_rating}
-                            totalCount={dossier?.reputation?.verified_stats?.peer_reviews_count}
-                        />
+                                {/* Pinned Proof of Work Bento Cards */}
+                                <PinnedProofSection
+                                    proofs={dossier?.pinned_proofs || []}
+                                    isOwner={true}
+                                    onManagePins={() => setEditDossierOpen(true)}
+                                />
 
-                        {/* Chronological Journey & Academic Credentials */}
-                        <ExperienceTimeline
-                            experiences={dossier?.experiences || []}
-                            educations={dossier?.educations || []}
-                            isOwner={true}
-                            onAddExperience={() => setEditDossierOpen(true)}
-                            onAddEducation={() => setEditDossierOpen(true)}
-                            onDeleteExperience={handleDeleteExperience}
-                            onDeleteEducation={handleDeleteEducation}
-                        />
+                                {/* Verified Teammate Endorsements Wall */}
+                                <PeerEndorsementWall
+                                    endorsements={dossier?.peer_endorsements || []}
+                                    averageRating={dossier?.reputation?.verified_stats?.average_peer_rating}
+                                    totalCount={dossier?.reputation?.verified_stats?.peer_reviews_count}
+                                />
 
-                        {/* Explainable Reputation Radar */}
-                        <ReputationRadar
-                            userId={user.id}
-                            reputation={dossier?.reputation}
-                            isOwner={true}
-                            onRecalculated={(newRep) => setDossier({ ...dossier, reputation: newRep })}
-                        />
-                    </>
-                )}
+                                {/* Chronological Journey & Academic Credentials */}
+                                <ExperienceTimeline
+                                    experiences={dossier?.experiences || []}
+                                    educations={dossier?.educations || []}
+                                    certifications={currentUserData.certifications || []}
+                                    isOwner={true}
+                                    onAddExperience={() => setEditDossierOpen(true)}
+                                    onAddEducation={() => setEditDossierOpen(true)}
+                                    onAddCertification={() => setEditDossierOpen(true)}
+                                    onDeleteExperience={handleDeleteExperience}
+                                    onDeleteEducation={handleDeleteEducation}
+                                    onDeleteCertification={handleDeleteCertification}
+                                />
+
+                                {/* Explainable Reputation Radar */}
+                                <ReputationRadar
+                                    userId={user.id}
+                                    reputation={dossier?.reputation}
+                                    isOwner={true}
+                                    onRecalculated={(newRep) => setDossier({ ...dossier, reputation: newRep })}
+                                />
+                            </>
+                        )}
 
                 {activeTab === 'posts' && (
                     <div className="space-y-4">
@@ -343,6 +415,106 @@ export default function ProfilePage() {
                         ) : (
                             <div className="rounded-3xl border border-white/[0.08] bg-[#0c0c14] p-12 text-center">
                                 <p className="text-zinc-400 text-sm">No posts shared yet. Share your first builder project or idea!</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'research' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl border border-white/[0.08] bg-[#0c0d15] shadow-xl">
+                            <div>
+                                <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-2">
+                                    <FlaskConical className="w-3.5 h-3.5" />
+                                    <span>Living Research Preprints & Lab Studies</span>
+                                </div>
+                                <h2 className="text-lg font-bold text-white">Your Published Research Dossier</h2>
+                                <p className="text-xs text-zinc-400 mt-1 max-w-xl">
+                                    Academic papers, algorithmic benchmarks, and hardware-verified studies published with verifiable Proof of Work.
+                                </p>
+                            </div>
+
+                            <Link
+                                href="/research?action=publish"
+                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition active:scale-[0.98]"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span>Publish Research Paper</span>
+                            </Link>
+                        </div>
+
+                        {researchLoading ? (
+                            <div className="rounded-3xl border border-white/[0.08] bg-[#0c0c14] p-12 text-center text-zinc-400 text-sm animate-pulse">
+                                Loading research publications...
+                            </div>
+                        ) : userResearchPapers.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {userResearchPapers.map((paper: any) => (
+                                    <div
+                                        key={paper.id}
+                                        className="rounded-2xl border border-white/[0.08] bg-[#0c0c14] p-5 space-y-3 hover:border-[#1864ff]/40 transition shadow-lg flex flex-col justify-between"
+                                    >
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-white/[0.05] text-zinc-300 border border-white/[0.08]">
+                                                    {paper.paper_code}
+                                                </span>
+                                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/[0.06]">
+                                                    {paper.status_display || paper.status}
+                                                </span>
+                                            </div>
+
+                                            <h3 className="text-sm font-bold text-white line-clamp-2">
+                                                {paper.title}
+                                            </h3>
+
+                                            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                                {paper.abstract}
+                                            </p>
+
+                                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-500">
+                                                {paper.has_bom && (
+                                                    <span className="inline-flex items-center gap-1 text-blue-400 font-medium">
+                                                        <Cpu className="w-3 h-3" />
+                                                        <span>VenopAI BOM</span>
+                                                    </span>
+                                                )}
+                                                {paper.reproducibility_score > 0 && (
+                                                    <span className="inline-flex items-center gap-1 text-zinc-300 font-mono">
+                                                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                                        <span>{paper.reproducibility_score.toFixed(1)}/5.0</span>
+                                                    </span>
+                                                )}
+                                                <span>• {new Date(paper.published_at).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-3 border-t border-white/[0.06] flex items-center justify-end">
+                                            <Link
+                                                href={`/research`}
+                                                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition"
+                                            >
+                                                <span>View in Research Hub</span>
+                                                <ExternalLink className="w-3 h-3" />
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-3xl border border-white/[0.08] bg-[#0c0c14] p-12 text-center">
+                                <FlaskConical className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                                <h3 className="text-sm font-bold text-white mb-1">No Research Papers Published Yet</h3>
+                                <p className="text-xs text-zinc-400 max-w-md mx-auto mb-5 leading-relaxed">
+                                    Publish academic preprints, algorithmic breakthroughs, or hardware-verified lab studies with the ENQUEbet community.
+                                </p>
+                                <Link
+                                    href="/research?action=publish"
+                                    className="btn-brand inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Publish Your First Paper</span>
+                                </Link>
                             </div>
                         )}
                     </div>
@@ -568,6 +740,31 @@ export default function ProfilePage() {
                         </div>
                     </div>
                 )}
+                    </div>
+
+                    {/* Contextual Right Sidebar */}
+                    <aside className="xl:col-span-4 2xl:col-span-3 space-y-5">
+                        <ProfileCompletionWidget
+                            user={currentUserData}
+                            onStartEdit={() => setEditDossierOpen(true)}
+                        />
+                        <SkillsSummaryWidget
+                            skills={currentUserData.skills}
+                            skillsDetailed={currentUserData.skills_detailed}
+                            isOwner={true}
+                            onManageSkills={handleEditBasic}
+                        />
+                        <CollaborationPreferencesWidget
+                            user={currentUserData}
+                            isOwner={true}
+                            onEditPreferences={() => setEditDossierOpen(true)}
+                        />
+                        <DiscoveryRecommendationsWidget
+                            isOwner={true}
+                            user={currentUserData}
+                        />
+                    </aside>
+                </div>
             </div>
 
             {/* Edit Dossier Modal */}
@@ -582,8 +779,28 @@ export default function ProfilePage() {
             {followModal && (
                 <FollowersModal
                     userId={user.id}
+                    username={user.username}
                     type={followModal}
+                    initialTab={followModal}
+                    isOwner={true}
                     onClose={() => setFollowModal(null)}
+                    onCountChange={(newFollowers, newFollowing) => {
+                        updateUser({
+                            ...user,
+                            followers_count: newFollowers,
+                            following_count: newFollowing,
+                        });
+                        if (dossier?.user) {
+                            setDossier({
+                                ...dossier,
+                                user: {
+                                    ...dossier.user,
+                                    followers_count: newFollowers,
+                                    following_count: newFollowing,
+                                },
+                            });
+                        }
+                    }}
                 />
             )}
         </div>

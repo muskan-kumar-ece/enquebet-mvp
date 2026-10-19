@@ -344,3 +344,47 @@ html {
 .animate-scale-in {
   animation: scaleIn 0.2s ease-out forwards;
 }
+
+/* ── Cyber Robot Mascot Animations ───────────── */
+@keyframes robotHeadShake {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  15% { transform: rotate(-11deg) translateX(-7px); }
+  30% { transform: rotate(11deg) translateX(7px); }
+  45% { transform: rotate(-8deg) translateX(-5px); }
+  60% { transform: rotate(8deg) translateX(5px); }
+  75% { transform: rotate(-4deg) translateX(-3px); }
+  90% { transform: rotate(4deg) translateX(3px); }
+}
+
+@keyframes robotHeadNod {
+  0%, 100% { transform: translateY(0) rotateX(0deg); }
+  25% { transform: translateY(-7px) rotateX(-10deg); }
+  50% { transform: translateY(4px) rotateX(8deg); }
+  75% { transform: translateY(-3px) rotateX(-4deg); }
+}
+
+@keyframes robotFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes robotAntennaPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); }
+}
+
+.animate-robot-shake {
+  animation: robotHeadShake 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.animate-robot-nod {
+  animation: robotHeadNod 0.8s ease-in-out both;
+}
+
+.animate-robot-float {
+  animation: robotFloat 3.6s ease-in-out infinite;
+}
+
+.animate-antenna-pulse {
+  animation: robotAntennaPulse 2s ease-in-out infinite;
+}

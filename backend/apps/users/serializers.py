@@ -70,6 +70,7 @@ class UserSerializer(serializers.ModelSerializer):
     skills_detailed = UserSkillSerializer(source='skills', many=True, read_only=True)
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
     completeness_score = serializers.SerializerMethodField()
     is_private_locked = serializers.SerializerMethodField()
     reputation_tier = serializers.SerializerMethodField()
@@ -85,14 +86,16 @@ class UserSerializer(serializers.ModelSerializer):
             'verification_level', 'reputation_score', 'reputation_tier', 'completeness_score',
             'availability_status', 'pinned_proof_ids',
             'daily_focus_limit_minutes', 'quiet_hours_enabled', 'quiet_hours_start', 'quiet_hours_end', 'weekly_digest_enabled',
-            'skills', 'skills_detailed', 'followers_count', 'following_count',
-            'education', 'projects', 'experience',
+            'skills', 'skills_detailed', 'followers_count', 'following_count', 'is_following',
+            'education', 'projects', 'experience', 'certifications', 'collaboration_preferences',
             'resume_file', 'linkedin_url', 'github_url', 'portfolio_url',
+            'is_staff', 'is_superuser',
             'created_at'
         ]
         read_only_fields = [
             'id', 'created_at', 'verification_level', 'reputation_score',
-            'reputation_tier', 'completeness_score', 'is_private_locked'
+            'reputation_tier', 'completeness_score', 'is_private_locked',
+            'is_following', 'is_staff', 'is_superuser'
         ]
 
 
@@ -100,7 +103,7 @@ class UserSerializer(serializers.ModelSerializer):
         import json
         if hasattr(data, 'copy'):
             data = data.copy()
-        for field in ['education', 'experience', 'projects']:
+        for field in ['education', 'experience', 'projects', 'certifications', 'collaboration_preferences']:
             val = data.get(field)
             if isinstance(val, str):
                 try:
@@ -190,6 +193,8 @@ class UserSerializer(serializers.ModelSerializer):
                 data.pop('education', None)
                 data.pop('experience', None)
                 data.pop('projects', None)
+                data.pop('certifications', None)
+                data.pop('collaboration_preferences', None)
                 data.pop('resume_file', None)
                 data.pop('linkedin_url', None)
                 data.pop('github_url', None)
@@ -202,6 +207,17 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_following_count(self, obj):
         return obj.following.count()
+
+    def get_is_following(self, instance):
+        request = self.context.get('request')
+        if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
+            return False
+        if request.user.id == instance.id:
+            return False
+        followed_ids = self.context.get('followed_user_ids')
+        if followed_ids is not None:
+            return instance.id in followed_ids
+        return Follower.objects.filter(follower=request.user, following=instance).exists()
 
     def update(self, instance, validated_data):
         # Prevent non-admin users from self-awarding verification or reputation
