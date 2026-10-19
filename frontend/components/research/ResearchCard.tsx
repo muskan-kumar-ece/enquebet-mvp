@@ -243,13 +243,13 @@ export default function ResearchCard({
                         </button>
                     )}
 
-                    <button
-                        onClick={() => onSelect(paper)}
+                    <Link
+                        href={`/research/${paper.slug || paper.paper_code}`}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1864ff] hover:bg-[#1554d6] text-white font-semibold text-xs transition"
                     >
                         <BookOpen className="w-3 h-3" />
                         <span>Read</span>
-                    </button>
+                    </Link>
                 </div>
             </div>
         </div>

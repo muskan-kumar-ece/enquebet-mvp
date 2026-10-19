@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, RefreshCw, ShoppingCart, FileText, Settings, Users, Menu, X, Kanban } from 'lucide-react';
+import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, RefreshCw, ShoppingCart, FileText, Settings, Users, Menu, X, Kanban, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWebSocket } from '@/lib/contexts/WebSocketContext';
@@ -22,7 +22,7 @@ const extraNavItems = [
     { icon: Bot, label: 'Quebet AI', href: '/ai' },
     { icon: GraduationCap, label: 'Courses', href: '/courses' },
     { icon: Download, label: 'Resources', href: '/resources' },
-    { icon: RefreshCw, label: 'Updates', href: '/updates' },
+    { icon: Activity, label: 'Pulse', href: '/updates' },
     { icon: ShoppingCart, label: 'Shop', href: '/shop' },
     { icon: FileText, label: 'Research', href: '/research' },
 ];

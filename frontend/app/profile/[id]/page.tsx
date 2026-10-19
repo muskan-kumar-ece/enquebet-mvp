@@ -381,10 +381,10 @@ export default function UserProfilePage() {
 
                                                 <div className="pt-3 border-t border-[#1e2230] flex items-center justify-end">
                                                     <Link
-                                                        href={`/research`}
+                                                        href={paper.slug ? `/research/${paper.slug}` : `/research/${paper.paper_code}`}
                                                         className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition"
                                                     >
-                                                        <span>View in Research Hub</span>
+                                                        <span>Read Paper</span>
                                                         <ExternalLink className="w-3 h-3" />
                                                     </Link>
                                                 </div>

@@ -388,3 +388,82 @@ html {
 .animate-antenna-pulse {
   animation: robotAntennaPulse 2s ease-in-out infinite;
 }
+
+/* ── IEEE Academic & Engineering Typography ─────────────── */
+.ieee-paper-container {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  color: #e2e8f0;
+  line-height: 1.65;
+}
+
+.ieee-two-column {
+  column-count: 1;
+  column-gap: 2.25rem;
+  column-rule: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (min-width: 1024px) {
+  .ieee-two-column {
+    column-count: 2;
+  }
+}
+
+.ieee-column-span-all {
+  column-span: all;
+}
+
+.ieee-abstract {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  text-align: justify;
+}
+
+.ieee-abstract::before {
+  content: "Abstract—";
+  font-weight: 800;
+  font-style: normal;
+  color: #ffffff;
+  margin-right: 0.35rem;
+}
+
+.ieee-index-terms {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.ieee-index-terms strong {
+  font-style: italic;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.ieee-section-numeral {
+  font-family: var(--font-inter), monospace;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  break-after: avoid;
+}
+
+.ieee-equation-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background-color: rgba(13, 16, 23, 0.8);
+  border: 1px solid rgba(30, 35, 53, 0.8);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.8125rem;
+  color: #60a5fa;
+}

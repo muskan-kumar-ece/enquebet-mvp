@@ -33,7 +33,7 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
         status_filter = self.request.query_params.get('status', '')
 
         qs = ResearchPaper.objects.select_related('primary_author', 'associated_workspace', 'reviewed_by').prefetch_related(
-            'reproducibility_reviews', 'reproducibility_reviews__reviewer'
+            'reproducibility_reviews', 'reproducibility_reviews__reviewer', 'authors', 'versions'
         )
 
         # Scoping by Tab / Moderation Queue
@@ -133,14 +133,19 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
         return ResearchPaperDetailSerializer
 
     def retrieve(self, request, *args, **kwargs):
-        # Look up by slug or UUID id
+        # Look up by slug, paper_code, or UUID id
         slug_or_id = kwargs.get('slug')
         try:
             import uuid
-            uuid_obj = uuid.UUID(slug_or_id)
+            uuid_obj = uuid.UUID(str(slug_or_id))
             paper = get_object_or_404(ResearchPaper, id=uuid_obj)
         except (ValueError, AttributeError):
-            paper = get_object_or_404(ResearchPaper, slug=slug_or_id)
+            paper = ResearchPaper.objects.filter(
+                Q(slug=slug_or_id) | Q(paper_code__iexact=slug_or_id) | Q(slug__iexact=slug_or_id)
+            ).first()
+            if not paper:
+                from rest_framework.exceptions import NotFound
+                raise NotFound(f'No research paper found matching "{slug_or_id}".')
 
         # Increment views atomically
         ResearchPaper.objects.filter(id=paper.id).update(views_count=paper.views_count + 1)
@@ -300,6 +305,114 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
                 type='system',
                 reference_id=paper.id,
                 message=f"Your research paper submission '{paper.title}' was reviewed and not approved.{feedback}"
+            )
+        except Exception:
+            pass
+
+        return Response(ResearchPaperDetailSerializer(paper, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def request_revisions(self, request, slug=None):
+        """Admin action: request author revisions with constructive feedback"""
+        if not _is_user_admin(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only platform administrators can request research revisions.')
+
+        from django.utils import timezone
+        paper = self.get_object()
+        feedback = (request.data.get('feedback') or request.data.get('author_feedback') or '').strip()
+        editorial_notes = (request.data.get('editorial_notes') or request.data.get('internal_editorial_notes') or '').strip()
+        checklist = request.data.get('checklist') or request.data.get('screening_checklist')
+
+        if not feedback:
+            return Response({'error': 'Constructive author feedback is required when requesting revisions.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        paper.status = ResearchStatus.REVISION_REQUIRED
+        paper.author_feedback = feedback
+        if editorial_notes:
+            paper.internal_editorial_notes = editorial_notes
+        if checklist and isinstance(checklist, dict):
+            paper.screening_checklist = checklist
+        paper.reviewed_by = request.user
+        paper.reviewed_at = timezone.now()
+        paper.save(update_fields=['status', 'author_feedback', 'internal_editorial_notes', 'screening_checklist', 'reviewed_by', 'reviewed_at'])
+
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=paper.primary_author,
+                sender=request.user,
+                type='system',
+                reference_id=paper.id,
+                message=f"Revisions requested on research paper '{paper.title}' [{paper.paper_code}]. Review feedback: {feedback[:140]}"
+            )
+        except Exception:
+            pass
+
+        return Response(ResearchPaperDetailSerializer(paper, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def submit_revision(self, request, slug=None):
+        """Author action: submit a revised manuscript version with changelog"""
+        paper = self.get_object()
+        if paper.primary_author != request.user and not _is_user_admin(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only the primary author can submit revisions to this research paper.')
+
+        pdf_url = (request.data.get('pdf_url') or '').strip()
+        changelog = (request.data.get('changelog') or '').strip()
+
+        if not pdf_url:
+            return Response({'error': 'Revised PDF URL is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Version increment
+        from .models import ResearchVersion
+        latest_ver = paper.versions.order_by('-version_number').first()
+        next_ver = (latest_ver.version_number + 1) if latest_ver else 2
+
+        ResearchVersion.objects.create(
+            paper=paper,
+            version_number=next_ver,
+            pdf_url=pdf_url,
+            changelog=changelog or f'Revision {next_ver} submitted.'
+        )
+
+        paper.pdf_url = pdf_url
+        if request.data.get('abstract'):
+            paper.abstract = request.data.get('abstract').strip()
+        if request.data.get('methodology_summary'):
+            paper.methodology_summary = request.data.get('methodology_summary').strip()
+        paper.status = ResearchStatus.SUBMITTED
+        paper.save(update_fields=['pdf_url', 'abstract', 'methodology_summary', 'status'])
+
+        return Response(ResearchPaperDetailSerializer(paper, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def publish(self, request, slug=None):
+        """Admin action: formally transition paper to PREPRINT or PEER_REVIEWED"""
+        if not _is_user_admin(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only platform administrators can publish research papers.')
+
+        from django.utils import timezone
+        paper = self.get_object()
+        target_status = request.data.get('status') or ResearchStatus.PREPRINT
+        if target_status not in [ResearchStatus.PREPRINT, ResearchStatus.PEER_REVIEWED]:
+            target_status = ResearchStatus.PREPRINT
+
+        paper.status = target_status
+        paper.reviewed_by = request.user
+        paper.reviewed_at = timezone.now()
+        paper.save(update_fields=['status', 'reviewed_by', 'reviewed_at'])
+
+        try:
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                user=paper.primary_author,
+                sender=request.user,
+                type='system',
+                reference_id=paper.id,
+                message=f"Congratulations! Your research paper '{paper.title}' has been officially published as an {paper.get_status_display()}."
             )
         except Exception:
             pass

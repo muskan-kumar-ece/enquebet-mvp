@@ -4,7 +4,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, MapPin, Globe, GraduationCap, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
-import { getUserCoordinates } from '@/lib/geo';
+import { requestUserCoordinates } from '@/lib/geo';
 import MediaUpload from '@/components/ui/MediaUpload';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import toast from 'react-hot-toast';
@@ -40,7 +40,7 @@ export default function CreatePostPage() {
     const handleDetectLocation = async () => {
         setDetectingLocation(true);
         try {
-            const coords = await getUserCoordinates({ forceRefresh: true });
+            const coords = await requestUserCoordinates({ forceRefresh: true });
             if (coords) {
                 setFormData(prev => ({
                     ...prev,

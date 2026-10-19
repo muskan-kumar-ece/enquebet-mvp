@@ -7,10 +7,11 @@ import PostCreationBox from '@/components/feed/PostCreationBox';
 import FeedTabs from '@/components/feed/FeedTabs';
 import PostCard from '@/components/feed/PostCard';
 import { api } from '@/lib/api';
-import { getUserCoordinates, GeoCoordinates } from '@/lib/geo';
+import { autoFetchCoordinates, requestUserCoordinates, GeoCoordinates } from '@/lib/geo';
 import { FeedSkeleton } from '@/components/ui/skeletons';
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { Users, GraduationCap, Sparkles, Globe, Lightbulb, MapPin, RefreshCw } from 'lucide-react';
+import { Users, GraduationCap, Sparkles, Globe, Lightbulb, MapPin, RefreshCw, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -22,6 +23,7 @@ export default function HomePage() {
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [coords, setCoords] = useState<GeoCoordinates | null>(null);
+  const [syncingLocation, setSyncingLocation] = useState(false);
 
   const fetchPosts = useCallback(async (tab: string, page = 1, append = false, overrideCoords?: GeoCoordinates | null) => {
     if (append) {
@@ -75,14 +77,33 @@ export default function HomePage() {
     }
   }, [coords]);
 
-  // Try to load cached or coarse coordinates on mount
+  // Load cached coordinates or silently sync if browser permission is already granted.
+  // NEVER triggers an unsolicited browser permission dialog on mount.
   useEffect(() => {
-    getUserCoordinates().then((c) => {
+    autoFetchCoordinates().then((c) => {
       if (c) {
         setCoords(c);
       }
     });
   }, []);
+
+  const handleDetectOrSyncLocation = async () => {
+    setSyncingLocation(true);
+    try {
+      const resolved = await requestUserCoordinates({ forceRefresh: true });
+      if (resolved) {
+        setCoords(resolved);
+        fetchPosts(activeTab, 1, false, resolved);
+        toast.success(resolved.city ? `Location: ${resolved.city}` : 'GPS coordinates captured');
+      } else {
+        toast.error('Location permission was denied or unavailable');
+      }
+    } catch {
+      toast.error('Could not detect location');
+    } finally {
+      setSyncingLocation(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -233,17 +254,17 @@ export default function HomePage() {
               </span>
             </div>
             <button
-              onClick={async () => {
-                const updated = await getUserCoordinates({ forceRefresh: true });
-                if (updated) {
-                  setCoords(updated);
-                  fetchPosts(activeTab, 1, false, updated);
-                }
-              }}
-              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors px-2.5 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-zinc-800 shrink-0 ml-2 font-mono"
+              onClick={handleDetectOrSyncLocation}
+              disabled={syncingLocation}
+              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors px-2.5 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-zinc-800 shrink-0 ml-2 font-mono disabled:opacity-50"
               title="Refresh GPS Location"
             >
-              <RefreshCw className="w-3 h-3" /> Sync
+              {syncingLocation ? (
+                <Loader2 className="w-3 h-3 animate-spin text-[#1864ff]" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              Sync
             </button>
           </div>
         ) : (
@@ -253,15 +274,13 @@ export default function HomePage() {
               <span className="truncate text-xs">Prioritize collegiate & regional builder ventures</span>
             </div>
             <button
-              onClick={async () => {
-                const resolved = await getUserCoordinates({ forceRefresh: true });
-                if (resolved) {
-                  setCoords(resolved);
-                  fetchPosts(activeTab, 1, false, resolved);
-                }
-              }}
-              className="btn-primary text-[11px] px-3 py-1 shrink-0 font-medium ml-2"
+              onClick={handleDetectOrSyncLocation}
+              disabled={syncingLocation}
+              className="btn-primary text-[11px] px-3 py-1 shrink-0 font-medium ml-2 flex items-center gap-1.5 disabled:opacity-50"
             >
+              {syncingLocation ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : null}
               Detect Location
             </button>
           </div>

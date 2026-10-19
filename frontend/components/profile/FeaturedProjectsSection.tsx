@@ -10,7 +10,8 @@ import {
     Plus,
     Users,
     Layers,
-    ArrowUpRight
+    ArrowUpRight,
+    FlaskConical
 } from 'lucide-react';
 
 export interface FeaturedProject {
@@ -19,10 +20,12 @@ export interface FeaturedProject {
     description: string;
     role?: string;
     tech_stack?: string[];
-    project_type?: 'personal' | 'collaborative' | 'verified_pow' | string;
+    project_type?: 'personal' | 'collaborative' | 'verified_pow' | 'published_research' | string;
     live_url?: string;
     repo_url?: string;
     linked_pow_code?: string;
+    linked_paper_slug?: string;
+    linked_paper_code?: string;
 }
 
 interface FeaturedProjectsSectionProps {
@@ -36,6 +39,11 @@ const TYPE_CONFIG: Record<string, { label: string; badge: string; icon: any }> =
         label: 'Verified PoW',
         badge: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-mono',
         icon: ShieldCheck
+    },
+    published_research: {
+        label: 'Published Research',
+        badge: 'bg-[#1864ff]/10 border-[#1864ff]/30 text-[#4f8fff] font-mono',
+        icon: FlaskConical
     },
     collaborative: {
         label: 'Collaborative Venture',
@@ -185,6 +193,16 @@ export default function FeaturedProjectsSection({
                                         >
                                             <ShieldCheck className="w-3 h-3" />
                                             <span>PoW: {proj.linked_pow_code}</span>
+                                        </Link>
+                                    )}
+
+                                    {(proj.linked_paper_slug || proj.linked_paper_code) && (
+                                        <Link
+                                            href={`/research/${proj.linked_paper_slug || proj.linked_paper_code}`}
+                                            className="inline-flex items-center gap-1 text-[11px] font-mono text-[#4f8fff] hover:text-[#7bb0ff]"
+                                        >
+                                            <FlaskConical className="w-3 h-3" />
+                                            <span>Paper: {proj.linked_paper_code || 'IEEE View'}</span>
                                         </Link>
                                     )}
                                 </div>

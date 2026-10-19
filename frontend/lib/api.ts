@@ -941,6 +941,15 @@ class ApiClient {
         doi?: string;
         keywords?: string[];
         associated_workspace?: string;
+        authors?: Array<{
+            full_name: string;
+            email?: string;
+            affiliation?: string;
+            orcid?: string;
+            is_corresponding?: boolean;
+            order?: number;
+            contribution_statement?: string;
+        }>;
     }) {
         return this.request<any>('/research/', {
             method: 'POST',
@@ -980,6 +989,27 @@ class ApiClient {
         return this.request<{ format: string; citation: string; paper_code: string }>(`/research/${slug}/citation/?style=${encodeURIComponent(style)}`);
     }
 
+    async requestPaperRevisions(slug: string, data: { feedback: string; editorial_notes?: string; checklist?: any }) {
+        return this.request<any>(`/research/${slug}/request_revisions/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async submitPaperRevision(slug: string, data: { pdf_url: string; changelog?: string; abstract?: string; methodology_summary?: string }) {
+        return this.request<any>(`/research/${slug}/submit_revision/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async publishResearchPaper(slug: string, targetStatus?: string) {
+        return this.request<any>(`/research/${slug}/publish/`, {
+            method: 'POST',
+            body: JSON.stringify({ status: targetStatus }),
+        });
+    }
+
     async getResearchStats() {
         return this.request<{
             total_papers: number;
@@ -1005,6 +1035,10 @@ class ApiClient {
             method: 'POST',
             body: formData,
         });
+    }
+
+    async uploadImage(file: File) {
+        return this.uploadDocument(file);
     }
 
     // Engineering Resources endpoints
@@ -1078,8 +1112,16 @@ class ApiClient {
         }>('/resources/stats/');
     }
 
-    // Platform Updates & Engineering Dispatches
-    async getPlatformUpdates(params: { category?: string; search?: string } = {}) {
+    // ENQUEbet Pulse — Technical Intelligence, Briefings, Lifecycle & Opportunities
+    async getPlatformUpdates(params: {
+        category?: string;
+        search?: string;
+        tab?: string;
+        type?: string;
+        importance?: string;
+        tag?: string;
+        page?: number;
+    } = {}) {
         const query = new URLSearchParams();
         if (params.category && params.category !== 'all') {
             query.append('category', params.category);
@@ -1087,52 +1129,109 @@ class ApiClient {
         if (params.search) {
             query.append('search', params.search);
         }
+        if (params.tab && params.tab !== 'all') {
+            query.append('tab', params.tab);
+        }
+        if (params.type && params.type !== 'all') {
+            query.append('type', params.type);
+        }
+        if (params.importance && params.importance !== 'all') {
+            query.append('importance', params.importance);
+        }
+        if (params.tag) {
+            query.append('tag', params.tag);
+        }
+        if (params.page) {
+            query.append('page', params.page.toString());
+        }
         const qs = query.toString();
-        return this.request<any[]>(`/updates/${qs ? `?${qs}` : ''}`);
+        return this.request<any>(`/updates/${qs ? `?${qs}` : ''}`);
+    }
+
+    async getPulseBriefing() {
+        return this.request<{
+            date: string;
+            total_recent: number;
+            top_story: any | null;
+            daily_developments: any[];
+        }>('/updates/briefing/');
+    }
+
+    async getPulseLifecycle(params: { status?: string; search?: string } = {}) {
+        const query = new URLSearchParams();
+        if (params.status && params.status !== 'all') {
+            query.append('status', params.status);
+        }
+        if (params.search) {
+            query.append('search', params.search);
+        }
+        const qs = query.toString();
+        return this.request<any>(`/updates/lifecycle/${qs ? `?${qs}` : ''}`);
+    }
+
+    async getPulseOpportunities(params: { type?: string; search?: string } = {}) {
+        const query = new URLSearchParams();
+        if (params.type && params.type !== 'all') {
+            query.append('type', params.type);
+        }
+        if (params.search) {
+            query.append('search', params.search);
+        }
+        const qs = query.toString();
+        return this.request<any>(`/updates/opportunities/${qs ? `?${qs}` : ''}`);
+    }
+
+    async toggleSavePulseUpdate(slugOrId: string) {
+        return this.request<{ is_saved: boolean; saves_count: number; update_id: string }>(
+            `/updates/${slugOrId}/save/`,
+            { method: 'POST' }
+        );
+    }
+
+    async getPulsePreferences() {
+        return this.request<{
+            followed_categories: string[];
+            followed_technologies: string[];
+            receive_weekly_briefing: boolean;
+        }>('/updates/preferences/');
+    }
+
+    async updatePulsePreferences(data: {
+        followed_categories?: string[];
+        followed_technologies?: string[];
+        receive_weekly_briefing?: boolean;
+    }) {
+        return this.request<any>('/updates/preferences/', {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async createPulseWorkspaceTask(slugOrId: string, workspaceId: string) {
+        return this.request<{
+            success: boolean;
+            task_id: string;
+            task_title: string;
+            workspace_id: string;
+            message: string;
+        }>(`/updates/${slugOrId}/create_workspace_task/`, {
+            method: 'POST',
+            body: JSON.stringify({ workspace_id: workspaceId }),
+        });
     }
 
     async getPlatformUpdate(slugOrId: string) {
         return this.request<any>(`/updates/${slugOrId}/`);
     }
 
-    async createPlatformUpdate(data: {
-        title: string;
-        category: string;
-        summary: string;
-        content: string;
-        cover_image?: string;
-        media_urls?: string[];
-        documents?: Array<{
-            name: string;
-            url: string;
-            file_format?: string;
-            file_size_bytes?: number;
-        }>;
-        external_links?: Array<{
-            title: string;
-            url: string;
-        }>;
-        is_pinned?: boolean;
-        is_published?: boolean;
-    }) {
+    async createPlatformUpdate(data: any) {
         return this.request<any>('/updates/', {
             method: 'POST',
             body: JSON.stringify(data),
         });
     }
 
-    async updatePlatformUpdate(slugOrId: string, data: Partial<{
-        title: string;
-        category: string;
-        summary: string;
-        content: string;
-        cover_image?: string;
-        media_urls?: string[];
-        documents?: any[];
-        external_links?: any[];
-        is_pinned?: boolean;
-        is_published?: boolean;
-    }>) {
+    async updatePlatformUpdate(slugOrId: string, data: any) {
         return this.request<any>(`/updates/${slugOrId}/`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -1153,6 +1252,9 @@ class ApiClient {
         return this.request<{
             total_count: number;
             pinned_count: number;
+            top_story_count: number;
+            opportunities_count: number;
+            lifecycle_count: number;
             category_counts: Record<string, number>;
         }>('/updates/stats/');
     }

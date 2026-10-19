@@ -158,6 +158,15 @@ export default function ResearchDetailDrawer({
                             )}
                         </div>
 
+                        <Link
+                            href={`/research/${paper.slug || paper.paper_code}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1864ff]/15 hover:bg-[#1864ff]/25 border border-[#1864ff]/30 text-[#4f8fff] text-xs font-mono transition"
+                            title="Open Full IEEE Paper Page"
+                        >
+                            <span>Full Article</span>
+                            <ArrowUpRight className="w-3 h-3" />
+                        </Link>
+
                         <button
                             onClick={onClose}
                             className="p-1.5 rounded-lg border border-[#1b1e2c] bg-white/[0.02] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition"

@@ -3,6 +3,11 @@
  *
  * Coordinates are rounded to 2 decimal places (~1.1 km precision) before
  * being transmitted to any API, strictly preserving user doorstep/building privacy.
+ *
+ * Implements intelligent, one-time permission flow:
+ * - NEVER triggers an unsolicited browser permission dialog on initial page mount.
+ * - Auto-fetches silently in the background when browser permission is already granted.
+ * - Persists coarse coordinates for 7 days in localStorage to eliminate repeat prompts.
  */
 
 export interface GeoCoordinates {
@@ -12,13 +17,55 @@ export interface GeoCoordinates {
   source?: 'gps' | 'cache' | 'ip';
 }
 
-const STORAGE_KEY = 'enquebet_user_coords_v1';
+interface StoredGeoData {
+  coords: GeoCoordinates;
+  timestamp: number;
+  permissionState?: 'granted' | 'denied' | 'prompt';
+}
+
+const STORAGE_KEY = 'enquebet_user_coords_v2';
+const LEGACY_STORAGE_KEY = 'enquebet_user_coords_v1';
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
  * Rounds a coordinate to 2 decimal places (~1.1 km coarse precision).
  */
 export function roundCoordinate(val: number): number {
   return Math.round(val * 100) / 100;
+}
+
+/**
+ * Safely inspects the browser's native Geolocation permission state
+ * using the Permissions API WITHOUT triggering a user prompt.
+ * Returns: 'granted' | 'prompt' | 'denied' | null
+ */
+export async function getBrowserPermissionState(): Promise<PermissionState | null> {
+  if (typeof window === 'undefined' || !navigator.permissions?.query) {
+    return null;
+  }
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return status.state;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads valid cached coordinates from localStorage.
+ */
+function getCachedData(): StoredGeoData | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: StoredGeoData = JSON.parse(raw);
+    if (!parsed?.coords) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -53,39 +100,21 @@ export async function reverseGeocodeCity(lat: number, lng: number): Promise<stri
 }
 
 /**
- * Get user coordinates using HTML5 Geolocation with coarse rounding.
- * Checks localStorage cache first unless `forceRefresh` is requested.
+ * Internal worker to query GPS, reverse-geocode city, and write to cache.
  */
-export async function getUserCoordinates(options?: {
-  forceRefresh?: boolean;
+async function fetchAndCachePosition(options?: {
   coarse?: boolean;
+  timeoutMs?: number;
+  highAccuracy?: boolean;
 }): Promise<GeoCoordinates | null> {
   if (typeof window === 'undefined' || !navigator.geolocation) {
     return null;
   }
 
   const coarse = options?.coarse ?? true;
+  const timeoutMs = options?.timeoutMs ?? 8000;
+  const highAccuracy = options?.highAccuracy ?? false;
 
-  // 1. Check local cache (valid for 4 hours)
-  if (!options?.forceRefresh) {
-    try {
-      const cached = localStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const ageHours = (Date.now() - (parsed.timestamp || 0)) / (1000 * 60 * 60);
-        if (ageHours < 4 && parsed.coords) {
-          return {
-            ...parsed.coords,
-            source: 'cache',
-          };
-        }
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-  }
-
-  // 2. Request current position from browser
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -111,28 +140,40 @@ export async function getUserCoordinates(options?: {
           source: 'gps',
         };
 
-        // Cache coordinates
+        // Cache coordinates with 7-day TTL
         try {
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-              coords: result,
-              timestamp: Date.now(),
-            })
-          );
+          const payload: StoredGeoData = {
+            coords: result,
+            timestamp: Date.now(),
+            permissionState: 'granted',
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch {
           // ignore storage errors
         }
 
         resolve(result);
       },
-      () => {
-        // Permission denied or unavailable
+      (err) => {
+        // If user actively blocked or permission was denied
+        if (err.code === 1) { // PERMISSION_DENIED
+          try {
+            const existing = getCachedData();
+            const payload: StoredGeoData = {
+              coords: existing?.coords || { latitude: 0, longitude: 0 },
+              timestamp: Date.now(),
+              permissionState: 'denied',
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          } catch {
+            // ignore storage errors
+          }
+        }
         resolve(null);
       },
       {
-        enableHighAccuracy: false, // Low battery & coarse preferred
-        timeout: 8000,
+        enableHighAccuracy: highAccuracy,
+        timeout: timeoutMs,
         maximumAge: 1000 * 60 * 60, // accept 1h old browser-cached position
       }
     );
@@ -140,11 +181,86 @@ export async function getUserCoordinates(options?: {
 }
 
 /**
- * Clear cached coordinates from localStorage.
+ * AUTO-FETCH ON MOUNT (Zero Unsolicited Popups):
+ *
+ * 1. Checks if valid cached coordinates exist (< 7 days old). If yes, returns them immediately.
+ * 2. Checks browser's native permission state via Permissions API:
+ *    - If 'granted': silently syncs updated GPS in the background with ZERO dialogs or popups.
+ *    - If 'prompt' or 'denied': NEVER invokes navigator.geolocation on mount! Returns cache or null.
+ */
+export async function autoFetchCoordinates(): Promise<GeoCoordinates | null> {
+  if (typeof window === 'undefined') return null;
+
+  const cached = getCachedData();
+  const now = Date.now();
+  const isFresh = cached && (now - cached.timestamp) < CACHE_TTL_MS;
+
+  // 1. If we have fresh cached coordinates, return them immediately
+  if (isFresh && cached?.coords) {
+    // If the browser permission is already granted, refresh in the background silently
+    getBrowserPermissionState().then((perm) => {
+      if (perm === 'granted') {
+        fetchAndCachePosition({ timeoutMs: 5000, highAccuracy: false }).catch(() => {});
+      }
+    });
+
+    return {
+      ...cached.coords,
+      source: 'cache',
+    };
+  }
+
+  // 2. No fresh cache. Check browser permission state WITHOUT triggering a popup
+  const browserPerm = await getBrowserPermissionState();
+
+  if (browserPerm === 'granted') {
+    // Permission is already granted by user in browser: safe to fetch silently without popup
+    const fresh = await fetchAndCachePosition({ timeoutMs: 6000, highAccuracy: false });
+    if (fresh) return fresh;
+  }
+
+  // 3. If permission is 'prompt' or 'denied', DO NOT pop up on mount.
+  // Return any existing cached coords if present, else null
+  if (cached?.coords && cached.coords.latitude !== 0) {
+    return {
+      ...cached.coords,
+      source: 'cache',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * USER-TRIGGERED EXPLICIT ACTION:
+ *
+ * Called ONLY when the user clicks [Detect Location], [Sync], or location button in create post.
+ * Explicitly invokes navigator.geolocation to prompt for permission if needed,
+ * then saves 'granted' state and coordinates for 7 days.
+ */
+export async function requestUserCoordinates(options?: {
+  forceRefresh?: boolean;
+  coarse?: boolean;
+}): Promise<GeoCoordinates | null> {
+  return fetchAndCachePosition({
+    coarse: options?.coarse ?? true,
+    timeoutMs: 8000,
+    highAccuracy: false,
+  });
+}
+
+/**
+ * Backward-compatible alias for existing callers.
+ */
+export const getUserCoordinates = requestUserCoordinates;
+
+/**
+ * Clear cached coordinates and reset permission state from localStorage.
  */
 export function clearUserCoordinates(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   }
 }
 

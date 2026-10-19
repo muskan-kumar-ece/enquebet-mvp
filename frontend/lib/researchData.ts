@@ -11,6 +11,27 @@ export interface HardwareBOMItem {
     estimated_price_paise?: number;
 }
 
+export interface PaperAuthor {
+    id?: string;
+    full_name: string;
+    email?: string;
+    affiliation?: string;
+    orcid?: string;
+    order?: number;
+    is_corresponding?: boolean;
+    contribution_statement?: string;
+    is_confirmed?: boolean;
+    user_id?: string;
+}
+
+export interface PaperVersion {
+    id: string;
+    version_number: number;
+    pdf_url: string;
+    changelog?: string;
+    submitted_at: string;
+}
+
 export interface ResearchAuthor {
     id: string;
     username: string;
@@ -45,11 +66,16 @@ export interface ResearchPaper {
     methodology_summary?: string;
     field: string;
     field_display?: string;
-    status: 'PREPRINT' | 'UNDER_REVIEW' | 'PEER_REVIEWED' | 'REPRODUCED' | 'PENDING_APPROVAL' | 'REJECTED';
+    status: 'DRAFT' | 'SUBMITTED' | 'PENDING_APPROVAL' | 'UNDER_REVIEW' | 'REVISION_REQUIRED' | 'ACCEPTED' | 'PREPRINT' | 'PEER_REVIEWED' | 'REPRODUCED' | 'REJECTED' | 'WITHDRAWN';
     status_display?: string;
     rejection_reason?: string;
     reviewed_at?: string;
+    author_feedback?: string;
+    internal_editorial_notes?: string;
+    screening_checklist?: Record<string, any>;
     primary_author: ResearchAuthor;
+    authors?: PaperAuthor[];
+    versions?: PaperVersion[];
     pdf_url?: string;
     code_repo_url?: string;
     dataset_url?: string;

@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import ResearchDetailDrawer from '@/components/research/ResearchDetailDrawer';
 import PublishPaperModal from '@/components/research/PublishPaperModal';
 import { AdminRejectModal } from '@/components/resources/AdminRejectModal';
+import { AdminResearchStudio } from '@/components/research/AdminResearchStudio';
 import { ShieldAlert, BookOpen, Clock } from 'lucide-react';
 
 function ResearchContent() {
@@ -89,8 +90,12 @@ function ResearchContent() {
 
             if (papersRes.status === 'fulfilled' && papersRes.value) {
                 const results = papersRes.value.results || papersRes.value;
-                if (Array.isArray(results)) {
+                if (Array.isArray(results) && results.length > 0) {
                     setPapers(results);
+                } else if (activeTab === 'catalog') {
+                    setPapers(CANONICAL_RESEARCH_PAPERS);
+                } else {
+                    setPapers([]);
                 }
             } else if (activeTab === 'catalog') {
                 setPapers(CANONICAL_RESEARCH_PAPERS);
@@ -99,11 +104,12 @@ function ResearchContent() {
             }
 
             if (statsRes.status === 'fulfilled' && statsRes.value) {
+                const total = statsRes.value.total_papers || 0;
                 setStats({
-                    totalPapers: statsRes.value.total_papers || papers.length,
-                    totalReproduced: statsRes.value.total_reproduced || 0,
-                    hardwareBomPapers: statsRes.value.hardware_bom_papers || 0,
-                    openCallsCount: papers.filter(p => p.open_collaborator_roles?.length > 0).length,
+                    totalPapers: total > 0 ? total : CANONICAL_RESEARCH_PAPERS.length,
+                    totalReproduced: statsRes.value.total_reproduced || CANONICAL_RESEARCH_PAPERS.filter(p => p.status === 'REPRODUCED').length,
+                    hardwareBomPapers: statsRes.value.hardware_bom_papers || CANONICAL_RESEARCH_PAPERS.filter(p => (p.hardware_bom?.length || 0) > 0).length,
+                    openCallsCount: CANONICAL_RESEARCH_PAPERS.filter(p => (p.open_collaborator_roles?.length || 0) > 0).length,
                 });
                 if (typeof statsRes.value.pending_count === 'number') {
                     setPendingCount(statsRes.value.pending_count);
@@ -275,99 +281,92 @@ function ResearchContent() {
                 )}
             </div>
 
-            {/* Moderation Queue Banner */}
-            {activeTab === 'moderation' && (
-                <div className="mb-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs text-amber-300">
-                    <div className="flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>
-                            <strong className="text-white">Research Moderation Queue: </strong>
-                            Review living preprints and verify technical rigor before publication.
-                        </span>
-                    </div>
-                    <span className="font-mono font-semibold text-amber-400">
-                        {papers.filter(p => p.status === 'PENDING_APPROVAL').length} Pending
-                    </span>
-                </div>
-            )}
-
-            {/* Discipline Tabs, Quick Feature Chips & Search Omnibox */}
-            <ResearchFilterTabs
-                activeField={activeField}
-                onSelectField={setActiveField}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                filterHasCode={filterHasCode}
-                onToggleHasCode={() => setFilterHasCode(!filterHasCode)}
-                filterHasBOM={filterHasBOM}
-                onToggleHasBOM={() => setFilterHasBOM(!filterHasBOM)}
-                filterReproduced={filterReproduced}
-                onToggleReproduced={() => setFilterReproduced(!filterReproduced)}
-                filterOpenCalls={filterOpenCalls}
-                onToggleOpenCalls={() => setFilterOpenCalls(!filterOpenCalls)}
-            />
-
-            {/* Results Count & Reset Controls */}
-            <div className="flex items-center justify-between text-xs text-zinc-400 mb-4 pb-2 border-b border-[#1b1e2c]">
-                <div>
-                    Showing <span className="font-semibold text-white">{filteredPapers.length}</span> living preprints
-                    {activeField !== 'ALL' && <span className="text-zinc-300"> in selected discipline</span>}
-                </div>
-
-                {(activeField !== 'ALL' || searchQuery || filterHasCode || filterHasBOM || filterReproduced || filterOpenCalls) && (
-                    <button
-                        onClick={() => {
-                            setActiveField('ALL');
-                            setSearchQuery('');
-                            setFilterHasCode(false);
-                            setFilterHasBOM(false);
-                            setFilterReproduced(false);
-                            setFilterOpenCalls(false);
-                        }}
-                        className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition"
-                    >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>Reset Filters</span>
-                    </button>
-                )}
-            </div>
-
-            {/* Research Papers Grid */}
-            {filteredPapers.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredPapers.map((paper) => (
-                        <ResearchCard
-                            key={paper.id}
-                            paper={paper}
-                            onSelect={handleSelectPaper}
-                            onCite={handleCite}
-                            onJoinLab={handleJoinLab}
-                            onApprove={handleApprovePaper}
-                            onReject={handleOpenRejectPaper}
-                            isAdmin={isAdmin}
-                        />
-                    ))}
-                </div>
+            {/* If in Moderation Mode, render dedicated AdminResearchStudio */}
+            {activeTab === 'moderation' ? (
+                <AdminResearchStudio
+                    papers={papers}
+                    onPaperUpdated={(updated) => {
+                        setPapers(prev => prev.map(p => p.id === updated.id ? updated : p));
+                    }}
+                    onRefresh={fetchPapers}
+                />
             ) : (
-                <div className="rounded-2xl border border-[#1b1e2c] bg-[#0c0d15] p-12 text-center max-w-md mx-auto">
-                    <FileText className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                    <h3 className="text-sm font-semibold text-white mb-1">
-                        {activeTab === 'moderation' ? 'Moderation Queue Clear' : 'No Research Papers Found'}
-                    </h3>
-                    <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
-                        {activeTab === 'moderation'
-                            ? 'All submitted research papers have been reviewed and processed.'
-                            : 'No preprints matched your current search filters. Clear filters or publish the first preprint in this discipline.'}
-                    </p>
-                    {activeTab !== 'moderation' && (
-                        <button
-                            onClick={() => setIsPublishModalOpen(true)}
-                            className="btn-brand inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2"
-                        >
-                            <span>Publish Preprint</span>
-                        </button>
+                <>
+                    {/* Discipline Tabs, Quick Feature Chips & Search Omnibox */}
+                    <ResearchFilterTabs
+                        activeField={activeField}
+                        onSelectField={setActiveField}
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
+                        filterHasCode={filterHasCode}
+                        onToggleHasCode={() => setFilterHasCode(!filterHasCode)}
+                        filterHasBOM={filterHasBOM}
+                        onToggleHasBOM={() => setFilterHasBOM(!filterHasBOM)}
+                        filterReproduced={filterReproduced}
+                        onToggleReproduced={() => setFilterReproduced(!filterReproduced)}
+                        filterOpenCalls={filterOpenCalls}
+                        onToggleOpenCalls={() => setFilterOpenCalls(!filterOpenCalls)}
+                    />
+
+                    {/* Results Count & Reset Controls */}
+                    <div className="flex items-center justify-between text-xs text-zinc-400 mb-4 pb-2 border-b border-[#1b1e2c]">
+                        <div>
+                            Showing <span className="font-semibold text-white">{filteredPapers.length}</span> living preprints
+                            {activeField !== 'ALL' && <span className="text-zinc-300"> in selected discipline</span>}
+                        </div>
+
+                        {(activeField !== 'ALL' || searchQuery || filterHasCode || filterHasBOM || filterReproduced || filterOpenCalls) && (
+                            <button
+                                onClick={() => {
+                                    setActiveField('ALL');
+                                    setSearchQuery('');
+                                    setFilterHasCode(false);
+                                    setFilterHasBOM(false);
+                                    setFilterReproduced(false);
+                                    setFilterOpenCalls(false);
+                                }}
+                                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition"
+                            >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reset Filters</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Research Papers Grid */}
+                    {filteredPapers.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {filteredPapers.map((paper) => (
+                                <ResearchCard
+                                    key={paper.id}
+                                    paper={paper}
+                                    onSelect={handleSelectPaper}
+                                    onCite={handleCite}
+                                    onJoinLab={handleJoinLab}
+                                    onApprove={handleApprovePaper}
+                                    onReject={handleOpenRejectPaper}
+                                    isAdmin={isAdmin}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-2xl border border-[#1b1e2c] bg-[#0c0d15] p-12 text-center max-w-md mx-auto">
+                            <FileText className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                            <h3 className="text-sm font-semibold text-white mb-1">
+                                No Research Papers Found
+                            </h3>
+                            <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
+                                No preprints matched your current search filters. Clear filters or publish the first preprint in this discipline.
+                            </p>
+                            <button
+                                onClick={() => setIsPublishModalOpen(true)}
+                                className="btn-brand inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2"
+                            >
+                                <span>Publish Preprint</span>
+                            </button>
+                        </div>
                     )}
-                </div>
+                </>
             )}
 
             {/* Living Paper Slide-Over Reader */}

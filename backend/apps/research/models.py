@@ -22,12 +22,17 @@ class ResearchField(models.TextChoices):
 
 
 class ResearchStatus(models.TextChoices):
+    DRAFT = 'DRAFT', 'Draft'
+    SUBMITTED = 'SUBMITTED', 'Submitted for Screening'
     PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Admin Approval'
-    PREPRINT = 'PREPRINT', 'Open Preprint'
-    UNDER_REVIEW = 'UNDER_REVIEW', 'Community Review in Progress'
+    UNDER_REVIEW = 'UNDER_REVIEW', 'Community & Peer Review in Progress'
+    REVISION_REQUIRED = 'REVISION_REQUIRED', 'Author Revisions Requested'
+    ACCEPTED = 'ACCEPTED', 'Accepted for Publication'
+    PREPRINT = 'PREPRINT', 'Open Preprint Published'
     PEER_REVIEWED = 'PEER_REVIEWED', 'Peer-Reviewed & Audited'
     REPRODUCED = 'REPRODUCED', 'Empirically Verified & Reproduced'
     REJECTED = 'REJECTED', 'Rejected'
+    WITHDRAWN = 'WITHDRAWN', 'Withdrawn by Author'
 
 
 class ResearchPaper(models.Model):
@@ -66,6 +71,11 @@ class ResearchPaper(models.Model):
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True, default='')
+
+    # Editorial & Reviewer Feedback
+    internal_editorial_notes = models.TextField(blank=True, default='')
+    author_feedback = models.TextField(blank=True, default='')
+    screening_checklist = models.JSONField(default=dict, blank=True)
 
     # Artifact Links
     pdf_url = models.URLField(max_length=600, blank=True, null=True)
@@ -176,3 +186,59 @@ class ReproducibilityReview(models.Model):
 
     def __str__(self):
         return f"{self.reviewer.username} on {self.paper.paper_code}: {self.verdict}"
+
+
+class ResearchAuthor(models.Model):
+    """Structured authors and institutional affiliations for IEEE indexing"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paper = models.ForeignKey(
+        ResearchPaper,
+        on_delete=models.CASCADE,
+        related_name='authors'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='authored_research'
+    )
+    full_name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    affiliation = models.CharField(max_length=300, blank=True, default='')
+    orcid = models.CharField(max_length=32, blank=True, default='')
+    order = models.PositiveSmallIntegerField(default=1)
+    is_corresponding = models.BooleanField(default=False)
+    contribution_statement = models.TextField(blank=True, default='')
+    is_confirmed = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'research_authors'
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"{self.full_name} ({self.affiliation or 'Independent'}) on {self.paper.paper_code}"
+
+
+class ResearchVersion(models.Model):
+    """Auditable version history and revision tracking for research papers"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    paper = models.ForeignKey(
+        ResearchPaper,
+        on_delete=models.CASCADE,
+        related_name='versions'
+    )
+    version_number = models.PositiveSmallIntegerField(default=1)
+    pdf_url = models.URLField(max_length=600)
+    changelog = models.TextField(blank=True, default='')
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'research_versions'
+        ordering = ['-version_number']
+        unique_together = ('paper', 'version_number')
+
+    def __str__(self):
+        return f"{self.paper.paper_code} v{self.version_number}"
+

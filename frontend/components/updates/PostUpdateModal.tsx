@@ -13,16 +13,21 @@ import {
     Loader2, 
     AlertCircle, 
     Eye, 
-    Edit3 
+    Edit3,
+    Sparkles,
+    ShieldAlert,
+    Wrench,
+    Flame
 } from 'lucide-react';
-import { UPDATE_CATEGORIES } from './UpdateFilterBar';
 import { api } from '@/lib/api';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
+import toast from 'react-hot-toast';
 
 interface PostUpdateModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
-    initialData?: any | null; // For editing existing update
+    initialData?: any | null;
 }
 
 interface AttachedDoc {
@@ -37,31 +42,59 @@ interface ExternalLinkItem {
     url: string;
 }
 
+const PULSE_CATEGORIES = [
+    { value: 'AI_ML', label: 'AI & Machine Learning' },
+    { value: 'SOFTWARE', label: 'Software Development' },
+    { value: 'ELECTRONICS', label: 'Electronics & Hardware' },
+    { value: 'CLOUD_DEVOPS', label: 'Cloud & Infrastructure' },
+    { value: 'CYBERSECURITY', label: 'Cybersecurity' },
+    { value: 'RESEARCH_SCIENCE', label: 'Research & Science' },
+    { value: 'STARTUPS', label: 'Startups & Industry' },
+    { value: 'CAREERS', label: 'Careers & Opportunities' },
+    { value: 'LIFECYCLE', label: 'Technology Lifecycle' },
+    // Legacy support
+    { value: 'PRODUCT_RELEASE', label: 'Product Release (Legacy)' },
+    { value: 'ENGINEERING_DISPATCH', label: 'Engineering Dispatch (Legacy)' },
+];
+
 export function PostUpdateModal({
     isOpen,
     onClose,
     onSuccess,
     initialData,
 }: PostUpdateModalProps) {
-    const [title, setTitle] = useState(initialData?.title || '');
-    const [category, setCategory] = useState(initialData?.category || 'PRODUCT_RELEASE');
-    const [summary, setSummary] = useState(initialData?.summary || '');
-    const [content, setContent] = useState(initialData?.content || '');
-    const [isPinned, setIsPinned] = useState(initialData?.is_pinned || false);
+    const [title, setTitle] = useState('');
+    const [category, setCategory] = useState('SOFTWARE');
+    const [updateType, setUpdateType] = useState('DAILY_BRIEF');
+    const [importance, setImportance] = useState('MEDIUM');
+    const [isTopStory, setIsTopStory] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+    const [editorialStatus, setEditorialStatus] = useState('PUBLISHED');
     
-    // Media & Attachments
-    const [coverImage, setCoverImage] = useState(initialData?.cover_image || '');
-    const [documents, setDocuments] = useState<AttachedDoc[]>(initialData?.documents || []);
-    const [externalLinks, setExternalLinks] = useState<ExternalLinkItem[]>(initialData?.external_links || []);
+    // Level 1 fields
+    const [summary, setSummary] = useState('');
+    const [whyItMatters, setWhyItMatters] = useState('');
+    const [whoShouldCare, setWhoShouldCare] = useState('');
+    const [whatToDoNext, setWhatToDoNext] = useState('');
     
-    // New link input state
+    // Level 2 field
+    const [content, setContent] = useState('');
+    
+    // Level 3 sources
+    const [primarySourceName, setPrimarySourceName] = useState('');
+    const [primarySourceUrl, setPrimarySourceUrl] = useState('');
+    const [readingTime, setReadingTime] = useState(3);
+    const [tagsInput, setTagsInput] = useState('');
+
+    // Attachments
+    const [coverImage, setCoverImage] = useState('');
+    const [documents, setDocuments] = useState<AttachedDoc[]>([]);
+    const [externalLinks, setExternalLinks] = useState<ExternalLinkItem[]>([]);
     const [newLinkTitle, setNewLinkTitle] = useState('');
     const [newLinkUrl, setNewLinkUrl] = useState('');
 
-    // Tab state for content editor
+    // UI state
     const [contentTab, setContentTab] = useState<'write' | 'preview'>('write');
-
-    // Upload & submission states
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const [isUploadingDoc, setIsUploadingDoc] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,23 +103,44 @@ export function PostUpdateModal({
     const imageInputRef = useRef<HTMLInputElement>(null);
     const docInputRef = useRef<HTMLInputElement>(null);
 
-    // Sync if initialData changes
     useEffect(() => {
         if (initialData) {
             setTitle(initialData.title || '');
-            setCategory(initialData.category || 'PRODUCT_RELEASE');
+            setCategory(initialData.category || 'SOFTWARE');
+            setUpdateType(initialData.update_type || 'DAILY_BRIEF');
+            setImportance(initialData.importance || 'MEDIUM');
+            setIsTopStory(Boolean(initialData.is_top_story));
+            setIsPinned(Boolean(initialData.is_pinned));
+            setEditorialStatus(initialData.editorial_status || 'PUBLISHED');
             setSummary(initialData.summary || '');
+            setWhyItMatters(initialData.why_it_matters || '');
+            setWhoShouldCare(initialData.who_should_care || '');
+            setWhatToDoNext(initialData.what_to_do_next || '');
             setContent(initialData.content || '');
-            setIsPinned(initialData.is_pinned || false);
+            setPrimarySourceName(initialData.primary_source_name || '');
+            setPrimarySourceUrl(initialData.primary_source_url || '');
+            setReadingTime(initialData.reading_time_minutes || 3);
+            setTagsInput(Array.isArray(initialData.tags) ? initialData.tags.join(', ') : '');
             setCoverImage(initialData.cover_image || '');
             setDocuments(initialData.documents || []);
             setExternalLinks(initialData.external_links || []);
         } else {
             setTitle('');
-            setCategory('PRODUCT_RELEASE');
-            setSummary('');
-            setContent('');
+            setCategory('SOFTWARE');
+            setUpdateType('DAILY_BRIEF');
+            setImportance('MEDIUM');
+            setIsTopStory(false);
             setIsPinned(false);
+            setEditorialStatus('PUBLISHED');
+            setSummary('');
+            setWhyItMatters('');
+            setWhoShouldCare('');
+            setWhatToDoNext('');
+            setContent('');
+            setPrimarySourceName('');
+            setPrimarySourceUrl('');
+            setReadingTime(3);
+            setTagsInput('');
             setCoverImage('');
             setDocuments([]);
             setExternalLinks([]);
@@ -96,130 +150,93 @@ export function PostUpdateModal({
 
     if (!isOpen) return null;
 
-    // Handle Image upload
     const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         setIsUploadingImage(true);
-        setErrorMessage(null);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('folder', 'enquebet/updates');
-
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1'}/uploads/image/`, {
-                method: 'POST',
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                body: formData,
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || 'Failed to upload image');
-            }
-
-            const data = await res.json();
-            setCoverImage(data.url);
+            const res = await api.uploadImage(file);
+            if (res.url) setCoverImage(res.url);
         } catch (err: any) {
-            setErrorMessage(err.message || 'Image upload failed');
+            toast.error(err.message || 'Image upload failed');
         } finally {
             setIsUploadingImage(false);
-            if (imageInputRef.current) imageInputRef.current.value = '';
         }
     };
 
-    // Handle Document upload
     const handleDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         setIsUploadingDoc(true);
-        setErrorMessage(null);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1'}/uploads/document/`, {
-                method: 'POST',
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                body: formData,
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || 'Failed to upload document');
+            const res = await api.uploadDocument(file);
+            if (res.url) {
+                setDocuments(prev => [...prev, {
+                    name: res.original_filename || file.name,
+                    url: res.url,
+                    file_format: file.name.split('.').pop()?.toLowerCase(),
+                    file_size_bytes: res.file_size_bytes || file.size,
+                }]);
             }
-
-            const data = await res.json();
-            const newDoc: AttachedDoc = {
-                name: data.file_name || file.name,
-                url: data.url,
-                file_format: data.file_format || file.name.split('.').pop() || 'doc',
-                file_size_bytes: data.file_size_bytes || file.size,
-            };
-
-            setDocuments((prev) => [...prev, newDoc]);
         } catch (err: any) {
-            setErrorMessage(err.message || 'Document upload failed');
+            toast.error(err.message || 'Doc upload failed');
         } finally {
             setIsUploadingDoc(false);
-            if (docInputRef.current) docInputRef.current.value = '';
         }
     };
 
     const handleAddLink = () => {
-        if (!newLinkUrl.trim()) return;
-        setExternalLinks((prev) => [
-            ...prev,
-            {
-                title: newLinkTitle.trim() || newLinkUrl.trim(),
-                url: newLinkUrl.trim().startsWith('http') ? newLinkUrl.trim() : `https://${newLinkUrl.trim()}`,
-            },
-        ]);
+        if (!newLinkTitle.trim() || !newLinkUrl.trim()) return;
+        setExternalLinks(prev => [...prev, { title: newLinkTitle.trim(), url: newLinkUrl.trim() }]);
         setNewLinkTitle('');
         setNewLinkUrl('');
     };
 
-    const handleRemoveDoc = (index: number) => {
-        setDocuments((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    const handleRemoveLink = (index: number) => {
-        setExternalLinks((prev) => prev.filter((_, i) => i !== index));
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || !summary.trim() || !content.trim()) {
-            setErrorMessage('Title, Short Digest (Summary), and Detailed Content are required.');
+        if (!title.trim() || !summary.trim()) {
+            setErrorMessage('Title and Summary (Level 1) are required.');
             return;
         }
 
         setIsSubmitting(true);
         setErrorMessage(null);
 
-        try {
-            const payload = {
-                title: title.trim(),
-                category,
-                summary: summary.trim(),
-                content: content.trim(),
-                cover_image: coverImage.trim(),
-                documents,
-                external_links: externalLinks,
-                is_pinned: isPinned,
-                is_published: true,
-            };
+        const tagsArray = tagsInput
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
 
+        const payload: any = {
+            title: title.trim(),
+            category,
+            update_type: updateType,
+            importance,
+            is_top_story: isTopStory,
+            is_pinned: isPinned,
+            editorial_status: editorialStatus,
+            summary: summary.trim(),
+            why_it_matters: whyItMatters.trim(),
+            who_should_care: whoShouldCare.trim(),
+            what_to_do_next: whatToDoNext.trim(),
+            content: content.trim() || summary.trim(),
+            primary_source_name: primarySourceName.trim(),
+            primary_source_url: primarySourceUrl.trim(),
+            reading_time_minutes: readingTime,
+            tags: tagsArray,
+            cover_image: coverImage,
+            documents,
+            external_links: externalLinks,
+        };
+
+        try {
             if (initialData?.id || initialData?.slug) {
                 await api.updatePlatformUpdate(initialData.slug || initialData.id, payload);
+                toast.success('Update saved successfully');
             } else {
                 await api.createPlatformUpdate(payload);
+                toast.success('Pulse update published!');
             }
-
             onSuccess();
             onClose();
         } catch (err: any) {
@@ -229,338 +246,270 @@ export function PostUpdateModal({
         }
     };
 
-    const categoryOptions = UPDATE_CATEGORIES.filter(c => c.value !== 'all');
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            {/* Backdrop */}
-            <div 
-                onClick={onClose}
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
-            />
-
-            {/* Modal Dialog */}
-            <div className="relative w-full max-w-2xl bg-surface-elevation-1 border border-border-default rounded-2xl shadow-2xl z-10 my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="relative w-full max-w-4xl bg-[#0d1017] border border-[#1e2335] rounded-3xl text-zinc-100 shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border-default/80 bg-surface-elevation-2/60">
-                    <div>
-                        <h2 className="text-lg font-bold text-text-primary">
-                            {initialData ? 'Edit Platform Update' : 'Post Platform Update & Engineering Dispatch'}
-                        </h2>
-                        <p className="text-xs text-text-secondary">
-                            Admin-only dispatch to community changelog and newsfeed
-                        </p>
+                <div className="px-6 py-4 border-b border-[#1e2335] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#1864ff]" />
+                        <h3 className="text-base font-bold text-white font-mono">
+                            {initialData ? 'Admin Studio: Edit Intelligence' : 'Admin Studio: Author Pulse Intelligence'}
+                        </h3>
                     </div>
-
                     <button
-                        type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-elevation-3 transition-colors cursor-pointer"
+                        className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-[#141824] transition-colors cursor-pointer"
                     >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                     {errorMessage && (
-                        <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center gap-2.5 text-xs text-red-400">
+                        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-300 text-xs flex items-center gap-2 font-mono">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             <span>{errorMessage}</span>
                         </div>
                     )}
 
-                    {/* Title & Category Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-2 space-y-1.5">
-                            <label className="text-xs font-medium text-text-secondary">
-                                Title / Headline <span className="text-brand-light">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="e.g. VenopAI Hardware Protocol 2.1 Released"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="w-full px-3.5 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary"
-                            />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-medium text-text-secondary">
-                                Category <span className="text-brand-light">*</span>
-                            </label>
+                    {/* Metadata Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Domain Category */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Domain Category</label>
                             <select
                                 value={category}
                                 onChange={(e) => setCategory(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-sm text-text-primary focus:outline-none focus:border-brand-primary"
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-[#1864ff]"
                             >
-                                {categoryOptions.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </option>
+                                {PULSE_CATEGORIES.map((c) => (
+                                    <option key={c.value} value={c.value}>{c.label}</option>
                                 ))}
+                            </select>
+                        </div>
+
+                        {/* Update Type */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Update Type</label>
+                            <select
+                                value={updateType}
+                                onChange={(e) => setUpdateType(e.target.value)}
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-[#1864ff]"
+                            >
+                                <option value="DAILY_BRIEF">Daily Briefing</option>
+                                <option value="RELEASE">Software Release</option>
+                                <option value="DEPRECATION">Deprecation Notice</option>
+                                <option value="SECURITY_ADVISORY">Security Advisory</option>
+                                <option value="RESEARCH_PAPER">Research Paper</option>
+                                <option value="OPPORTUNITY">Career Opportunity</option>
+                                <option value="HARDWARE_ANNOUNCEMENT">Hardware Dispatch</option>
+                            </select>
+                        </div>
+
+                        {/* Importance Level */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Importance</label>
+                            <select
+                                value={importance}
+                                onChange={(e) => setImportance(e.target.value)}
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-[#1864ff]"
+                            >
+                                <option value="ROUTINE">Routine</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="HIGH">High Priority</option>
+                                <option value="CRITICAL">Critical Impact</option>
+                            </select>
+                        </div>
+
+                        {/* Editorial Status */}
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Editorial Status</label>
+                            <select
+                                value={editorialStatus}
+                                onChange={(e) => setEditorialStatus(e.target.value)}
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono focus:border-[#1864ff]"
+                            >
+                                <option value="PUBLISHED">Published (Live)</option>
+                                <option value="DRAFT">Draft (Unpublished)</option>
+                                <option value="IN_REVIEW">In Review</option>
+                                <option value="SCHEDULED">Scheduled</option>
                             </select>
                         </div>
                     </div>
 
-                    {/* Pinned Checkbox */}
-                    <div className="flex items-center gap-2 pt-0.5">
-                        <input
-                            type="checkbox"
-                            id="is_pinned"
-                            checked={isPinned}
-                            onChange={(e) => setIsPinned(e.target.checked)}
-                            className="w-4 h-4 rounded border-border-default bg-surface-elevation-2 text-brand-primary focus:ring-brand-primary cursor-pointer"
-                        />
-                        <label htmlFor="is_pinned" className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer select-none">
-                            <Pin className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Pin this update to top of changelog</span>
+                    {/* Checkboxes: Lead Story + Pinned */}
+                    <div className="flex items-center gap-6 text-xs font-mono">
+                        <label className="flex items-center gap-2 cursor-pointer text-zinc-300">
+                            <input
+                                type="checkbox"
+                                checked={isTopStory}
+                                onChange={(e) => setIsTopStory(e.target.checked)}
+                                className="rounded bg-[#090b11] border-[#1e2335] text-[#1864ff]"
+                            />
+                            <span className="text-[#60a5fa] font-bold">★ Featured Lead Story</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-zinc-300">
+                            <input
+                                type="checkbox"
+                                checked={isPinned}
+                                onChange={(e) => setIsPinned(e.target.checked)}
+                                className="rounded bg-[#090b11] border-[#1e2335] text-[#1864ff]"
+                            />
+                            <span>Pin to Top of Feed</span>
                         </label>
                     </div>
 
-                    {/* Short Digest (TL;DR) */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-text-secondary">
-                                Short Digest (TL;DR) <span className="text-brand-light">*</span>
-                            </label>
-                            <span className="text-[11px] font-mono text-text-muted">
-                                1–3 concise sentences for scannable timeline
-                            </span>
-                        </div>
-                        <textarea
+                    {/* Title */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-mono text-zinc-300">Headline *</label>
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            placeholder="Clear, searchable headline (e.g. Next.js 16 Runtime Turbo Engine Released)..."
+                            className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3.5 py-2 text-sm text-white font-mono focus:border-[#1864ff]"
                             required
-                            rows={2}
-                            placeholder="Briefly summarize what was released, fixed, or announced..."
-                            value={summary}
-                            onChange={(e) => setSummary(e.target.value)}
-                            className="w-full px-3.5 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary leading-relaxed"
                         />
                     </div>
 
-                    {/* Detailed Content (Markdown) */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-text-secondary">
-                                Detailed Specification & Release Notes <span className="text-brand-light">*</span>
-                            </label>
+                    {/* Level 1: 30s Digest */}
+                    <div className="space-y-1">
+                        <label className="text-xs font-mono text-[#60a5fa] font-semibold">
+                            Level 1: What Happened? (In 30 Seconds) *
+                        </label>
+                        <textarea
+                            rows={2}
+                            value={summary}
+                            onChange={(e) => setSummary(e.target.value)}
+                            placeholder="Concise 1-3 sentence summary explaining the development clearly..."
+                            className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3.5 py-2 text-xs text-zinc-200 focus:border-[#1864ff]"
+                            required
+                        />
+                    </div>
 
-                            {/* Write / Preview Tab */}
-                            <div className="flex items-center rounded-md bg-surface-elevation-2 p-0.5 border border-border-default/60">
+                    {/* Level 1: Why it matters */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-mono text-zinc-300">Why It Matters</label>
+                            <textarea
+                                rows={2}
+                                value={whyItMatters}
+                                onChange={(e) => setWhyItMatters(e.target.value)}
+                                placeholder="Explain the practical effect for developers, teams, or students..."
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3.5 py-2 text-xs text-zinc-200 focus:border-[#1864ff]"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-mono text-zinc-300">Target Audience (Who Should Care)</label>
+                            <textarea
+                                rows={2}
+                                value={whoShouldCare}
+                                onChange={(e) => setWhoShouldCare(e.target.value)}
+                                placeholder="e.g. Frontend developers, embedded ECE teams, DevOps architects..."
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3.5 py-2 text-xs text-zinc-200 focus:border-[#1864ff]"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Level 2: Markdown Deep Dive */}
+                    <div className="space-y-2 border-t border-[#1e2335] pt-4">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-mono text-zinc-300 font-semibold">
+                                Level 2: Technical Deep Dive (Markdown)
+                            </label>
+                            <div className="flex items-center gap-1 bg-[#090b11] border border-[#1e2335] rounded-lg p-0.5">
                                 <button
                                     type="button"
                                     onClick={() => setContentTab('write')}
-                                    className={`px-2.5 py-1 rounded text-[11px] font-medium flex items-center gap-1 ${
-                                        contentTab === 'write' ? 'bg-surface-elevation-3 text-brand-light' : 'text-text-muted'
+                                    className={`px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer ${
+                                        contentTab === 'write' ? 'bg-[#1864ff] text-white' : 'text-zinc-400'
                                     }`}
                                 >
-                                    <Edit3 className="w-3 h-3" />
-                                    <span>Write</span>
+                                    Write
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setContentTab('preview')}
-                                    className={`px-2.5 py-1 rounded text-[11px] font-medium flex items-center gap-1 ${
-                                        contentTab === 'preview' ? 'bg-surface-elevation-3 text-brand-light' : 'text-text-muted'
+                                    className={`px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer ${
+                                        contentTab === 'preview' ? 'bg-[#1864ff] text-white' : 'text-zinc-400'
                                     }`}
                                 >
-                                    <Eye className="w-3 h-3" />
-                                    <span>Preview</span>
+                                    Preview
                                 </button>
                             </div>
                         </div>
 
                         {contentTab === 'write' ? (
                             <textarea
-                                required
                                 rows={6}
-                                placeholder="Write detailed markdown content, changelog bullet points, architecture diagrams, technical notes..."
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
-                                className="w-full px-3.5 py-2.5 rounded-lg bg-surface-elevation-2 border border-border-default text-sm text-text-primary font-mono placeholder:font-sans placeholder:text-text-muted focus:outline-none focus:border-brand-primary leading-relaxed"
+                                placeholder="Provide technical background, architecture changes, code blocks, limitations, schematics..."
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3.5 py-2 text-xs text-zinc-200 font-mono focus:border-[#1864ff]"
                             />
                         ) : (
-                            <div className="min-h-[140px] p-4 rounded-lg bg-surface-elevation-2/60 border border-border-default/60 text-sm text-text-primary whitespace-pre-line leading-relaxed">
-                                {content ? content : <span className="text-text-muted italic">Nothing to preview yet.</span>}
+                            <div className="p-4 bg-[#090b11] border border-[#1e2335] rounded-xl min-h-[140px]">
+                                <MarkdownRenderer content={content || '*No detailed content written yet.*'} />
                             </div>
                         )}
                     </div>
 
-                    {/* Cover Image Upload */}
-                    <div className="space-y-2 pt-2 border-t border-border-default/60">
-                        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-                            <ImageIcon className="w-3.5 h-3.5 text-brand-light" />
-                            <span>Cover Image (Optional)</span>
-                        </label>
-
-                        <div className="flex items-center gap-3">
+                    {/* Level 3: Sources & Tags */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-[#1e2335] pt-4">
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Primary Source Name</label>
                             <input
                                 type="text"
-                                placeholder="Paste image URL or upload file..."
-                                value={coverImage}
-                                onChange={(e) => setCoverImage(e.target.value)}
-                                className="flex-1 px-3.5 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary"
+                                value={primarySourceName}
+                                onChange={(e) => setPrimarySourceName(e.target.value)}
+                                placeholder="e.g. Vercel Engineering Blog"
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono"
                             />
-
-                            <input
-                                type="file"
-                                ref={imageInputRef}
-                                onChange={handleImageFileChange}
-                                accept="image/jpeg,image/png,image/webp,image/gif"
-                                className="hidden"
-                            />
-
-                            <button
-                                type="button"
-                                disabled={isUploadingImage}
-                                onClick={() => imageInputRef.current?.click()}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-elevation-2 hover:bg-surface-elevation-3 text-xs text-text-secondary border border-border-default transition-colors cursor-pointer shrink-0"
-                            >
-                                {isUploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                                <span>{isUploadingImage ? 'Uploading...' : 'Upload Image'}</span>
-                            </button>
                         </div>
 
-                        {coverImage && (
-                            <div className="relative w-28 h-16 rounded-lg overflow-hidden border border-border-default">
-                                <img src={coverImage} alt="Cover preview" className="w-full h-full object-cover" />
-                                <button
-                                    type="button"
-                                    onClick={() => setCoverImage('')}
-                                    className="absolute top-1 right-1 p-0.5 rounded-full bg-black/70 text-white hover:text-red-400"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Documents Upload Section */}
-                    <div className="space-y-2 pt-2 border-t border-border-default/60">
-                        <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-                                <FileText className="w-3.5 h-3.5 text-brand-light" />
-                                <span>Technical Documents & Attachments (PDF, DOCX, ZIP, etc.)</span>
-                            </label>
-
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Primary Source URL</label>
                             <input
-                                type="file"
-                                ref={docInputRef}
-                                onChange={handleDocFileChange}
-                                accept=".pdf,.docx,.doc,.txt,.md,.pptx,.zip,.epub"
-                                className="hidden"
+                                type="url"
+                                value={primarySourceUrl}
+                                onChange={(e) => setPrimarySourceUrl(e.target.value)}
+                                placeholder="https://..."
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono"
                             />
-
-                            <button
-                                type="button"
-                                disabled={isUploadingDoc}
-                                onClick={() => docInputRef.current?.click()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-primary/10 hover:bg-brand-primary/20 text-xs text-brand-light border border-brand-primary/25 transition-colors cursor-pointer"
-                            >
-                                {isUploadingDoc ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                                <span>{isUploadingDoc ? 'Uploading...' : 'Attach Document'}</span>
-                            </button>
                         </div>
 
-                        {documents.length > 0 && (
-                            <div className="space-y-1.5">
-                                {documents.map((doc, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-xs"
-                                    >
-                                        <div className="flex items-center gap-2 truncate">
-                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-brand-primary/15 text-brand-light">
-                                                {doc.file_format || 'DOC'}
-                                            </span>
-                                            <span className="text-text-primary truncate">{doc.name}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveDoc(idx)}
-                                            className="text-text-muted hover:text-red-400 p-1"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* External Resources Section */}
-                    <div className="space-y-2 pt-2 border-t border-border-default/60">
-                        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-                            <ExternalLink className="w-3.5 h-3.5 text-brand-light" />
-                            <span>External Links (GitHub PRs, Documentation, Live Demos)</span>
-                        </label>
-
-                        <div className="flex items-center gap-2">
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-mono text-zinc-400">Topic Tags (comma-separated)</label>
                             <input
                                 type="text"
-                                placeholder="Link Label (e.g. GitHub Release)"
-                                value={newLinkTitle}
-                                onChange={(e) => setNewLinkTitle(e.target.value)}
-                                className="flex-1 px-3 py-1.5 rounded-lg bg-surface-elevation-2 border border-border-default text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary"
+                                value={tagsInput}
+                                onChange={(e) => setTagsInput(e.target.value)}
+                                placeholder="python, react, risc-v..."
+                                className="w-full bg-[#090b11] border border-[#1e2335] rounded-xl px-3 py-1.5 text-xs text-zinc-200 font-mono"
                             />
-                            <input
-                                type="text"
-                                placeholder="URL (e.g. https://...)"
-                                value={newLinkUrl}
-                                onChange={(e) => setNewLinkUrl(e.target.value)}
-                                className="flex-1 px-3 py-1.5 rounded-lg bg-surface-elevation-2 border border-border-default text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleAddLink}
-                                className="px-3 py-1.5 rounded-lg bg-surface-elevation-2 hover:bg-surface-elevation-3 text-xs text-brand-light border border-border-default transition-colors cursor-pointer"
-                            >
-                                <Plus className="w-3.5 h-3.5" />
-                            </button>
                         </div>
-
-                        {externalLinks.length > 0 && (
-                            <div className="space-y-1.5">
-                                {externalLinks.map((link, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-elevation-2 border border-border-default text-xs"
-                                    >
-                                        <div className="truncate">
-                                            <span className="text-text-primary font-medium">{link.title}: </span>
-                                            <span className="text-text-muted font-mono">{link.url}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveLink(idx)}
-                                            className="text-text-muted hover:text-red-400 p-1"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
-                    {/* Footer Actions */}
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default/80">
+                    {/* Footer */}
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#1e2335]">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary bg-surface-elevation-2 hover:bg-surface-elevation-3 border border-border-default transition-colors cursor-pointer"
+                            className="px-4 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-white"
                         >
                             Cancel
                         </button>
-
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-medium text-white bg-brand-primary hover:bg-brand-primary/90 transition-colors shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#1864ff] hover:bg-[#1864ff]/90 text-white text-xs font-mono font-medium disabled:opacity-50 cursor-pointer shadow-sm"
                         >
                             {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            <span>{initialData ? 'Save Changes' : 'Publish Update'}</span>
+                            <span>{initialData ? 'Save Changes' : 'Publish Intelligence'}</span>
                         </button>
                     </div>
                 </form>
@@ -568,3 +517,6 @@ export function PostUpdateModal({
         </div>
     );
 }
+
+// Backward-compatible alias
+export const PulseAdminStudioModal = PostUpdateModal;
