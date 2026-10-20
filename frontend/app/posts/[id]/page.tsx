@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Heart, MessageCircle, Share2, Users, Send, ArrowLeft, MessageSquare, Bookmark, Check, Trash2, Kanban } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import PostMediaGallery from '@/components/ui/PostMediaGallery';
 
 export default function PostDetailPage() {
     const params = useParams();
@@ -23,6 +24,8 @@ export default function PostDetailPage() {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [sendingComment, setSendingComment] = useState(false);
     const [error, setError] = useState('');
+    const inFlightLikeRef = useRef(false);
+    const inFlightCommentRef = useRef(false);
 
     useEffect(() => {
         if (!authLoading && user) {
@@ -52,12 +55,26 @@ export default function PostDetailPage() {
     };
 
     const handleLike = async () => {
+        if (!params.id || inFlightLikeRef.current) return;
+        inFlightLikeRef.current = true;
+
+        const nextLiked = !isLiked;
+        const prevLikes = likesCount;
+        setIsLiked(nextLiked);
+        setLikesCount(nextLiked ? prevLikes + 1 : Math.max(0, prevLikes - 1));
+
         try {
-            const result = await api.toggleLike(params.id as string);
+            const result = await api.toggleLike(params.id as string, nextLiked ? 'like' : 'unlike');
             setIsLiked(result.liked);
-            setLikesCount(result.liked ? likesCount + 1 : likesCount - 1);
+            if (typeof result.likes_count === 'number') {
+                setLikesCount(result.likes_count);
+            }
         } catch (err: any) {
+            setIsLiked(!nextLiked);
+            setLikesCount(prevLikes);
             toast.error('Failed to update like');
+        } finally {
+            inFlightLikeRef.current = false;
         }
     };
 
@@ -93,17 +110,31 @@ export default function PostDetailPage() {
 
     const handleAddComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim()) return;
+        const content = newComment.trim();
+        if (!content || inFlightCommentRef.current) return;
 
+        inFlightCommentRef.current = true;
         setSendingComment(true);
+
+        const clientCommentId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `comm_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
         try {
-            const comment = await api.addComment(params.id as string, newComment);
-            setComments([...comments, comment]);
+            const comment = await api.addComment(params.id as string, content, clientCommentId);
+            setComments(prev => {
+                if (prev.some(c => c.id === comment.id)) return prev;
+                return [...prev, comment];
+            });
             setNewComment('');
+            if (typeof comment.post_comments_count === 'number') {
+                setPost((prev: any) => prev ? { ...prev, comments_count: comment.post_comments_count } : prev);
+            }
         } catch (err: any) {
             toast.error(err.message || 'Failed to add comment');
         } finally {
             setSendingComment(false);
+            inFlightCommentRef.current = false;
         }
     };
 
@@ -200,16 +231,17 @@ export default function PostDetailPage() {
                         )}
                     </div>
 
-                    {/* Attachment image */}
-                    {post.attachments && post.attachments.length > 0 && (
-                        <div className="mb-6 rounded-xl overflow-hidden">
-                            <img
-                                src={post.attachments[0].file_url}
-                                alt={post.title}
-                                className="w-full max-h-96 object-cover"
-                            />
-                        </div>
-                    )}
+                    {/* Media Gallery */}
+                    {(() => {
+                        const imageAttachments = (post.attachments || [])
+                            .filter((a: any) => a.file_type === 'image' && a.file_url)
+                            .map((a: any) => a.file_url);
+                        const allImages = imageAttachments.length > 0
+                            ? imageAttachments
+                            : (post.image || post.image_url ? [post.image || post.image_url] : []);
+
+                        return <PostMediaGallery images={allImages} altTitle={post.title} className="mb-6" />;
+                    })()}
 
                     {/* Title & Description */}
                     <h1 className="text-2xl font-bold mb-3">{post.title}</h1>

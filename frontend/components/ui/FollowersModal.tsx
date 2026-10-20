@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Users, Search, UserCheck, UserPlus, UserMinus, ShieldAlert, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -38,6 +38,7 @@ export default function FollowersModal({
     // Follow status tracking: user.id -> boolean (whether currentUser follows this user)
     const [followState, setFollowState] = useState<Record<string, boolean>>({});
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const inFlightActionRef = useRef<Set<string>>(new Set());
 
     // Instagram-style confirmation dialog state for removing a follower
     const [confirmRemoveUser, setConfirmRemoveUser] = useState<any | null>(null);
@@ -132,8 +133,9 @@ export default function FollowersModal({
 
     // Follow / Unfollow Toggle
     const handleFollowToggle = async (targetUser: any) => {
-        if (!targetUser?.id || actionLoading) return;
+        if (!targetUser?.id || actionLoading || inFlightActionRef.current.has(targetUser.id)) return;
         const targetId = targetUser.id;
+        inFlightActionRef.current.add(targetId);
         setActionLoading(targetId);
 
         const wasFollowing = followState[targetId] || false;
@@ -147,25 +149,37 @@ export default function FollowersModal({
             const updatedFollowing = followingList.filter((u) => u.id !== targetId);
             setFollowingList(updatedFollowing);
             if (currentUser) {
-                const newCount = Math.max(0, (currentUser.following_count || followingList.length) - 1);
+                const currentCount = typeof currentUser.following_count === 'number' ? currentUser.following_count : followingList.length;
+                const newCount = Math.max(0, currentCount - 1);
                 updateUser({ ...currentUser, following_count: newCount });
                 onCountChange?.(followersList.length, newCount);
             }
         } else if (effectiveIsOwner && willFollow) {
             if (currentUser) {
-                const newCount = (currentUser.following_count || followingList.length) + 1;
+                const currentCount = typeof currentUser.following_count === 'number' ? currentUser.following_count : followingList.length;
+                const newCount = currentCount + 1;
                 updateUser({ ...currentUser, following_count: newCount });
                 onCountChange?.(followersList.length, newCount);
             }
         }
 
         try {
+            let res: any;
             if (wasFollowing) {
-                await api.unfollowUser(targetId);
+                res = await api.unfollowUser(targetId);
                 toast.success(`Unfollowed @${targetUser.username}`);
             } else {
-                await api.followUser(targetId);
+                res = await api.followUser(targetId);
                 toast.success(`Following @${targetUser.username}`);
+            }
+            if (res && currentUser) {
+                const canonicalFollowing = typeof res.me_following_count === 'number'
+                    ? res.me_following_count
+                    : (typeof res.following_count === 'number' && effectiveIsOwner ? res.following_count : undefined);
+                if (typeof canonicalFollowing === 'number') {
+                    updateUser({ ...currentUser, following_count: canonicalFollowing });
+                    onCountChange?.(followersList.length, canonicalFollowing);
+                }
             }
         } catch (err: any) {
             // Rollback on error
@@ -174,6 +188,7 @@ export default function FollowersModal({
             // Refetch to restore exact backend state
             fetchFollowData();
         } finally {
+            inFlightActionRef.current.delete(targetId);
             setActionLoading(null);
         }
     };
@@ -186,14 +201,16 @@ export default function FollowersModal({
         setRemovingFollower(true);
 
         try {
-            await api.removeFollower(targetId);
+            const res = await api.removeFollower(targetId);
             const updatedFollowers = followersList.filter((u) => u.id !== targetId);
             setFollowersList(updatedFollowers);
 
             if (currentUser) {
-                const newCount = Math.max(0, (currentUser.followers_count || followersList.length) - 1);
-                updateUser({ ...currentUser, followers_count: newCount });
-                onCountChange?.(newCount, followingList.length);
+                const canonicalCount = typeof res?.followers_count === 'number'
+                    ? res.followers_count
+                    : Math.max(0, (typeof currentUser.followers_count === 'number' ? currentUser.followers_count : followersList.length) - 1);
+                updateUser({ ...currentUser, followers_count: canonicalCount });
+                onCountChange?.(canonicalCount, followingList.length);
             }
 
             toast.success(`Removed @${targetUsername} from your followers`);

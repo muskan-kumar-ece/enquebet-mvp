@@ -242,7 +242,13 @@ class ApiClient {
         requirements?: string[];
         tags?: string[];
         media?: File[];
+        client_post_id?: string;
     }) {
+        const headers: Record<string, string> = {};
+        if (data.client_post_id) {
+            headers['Idempotency-Key'] = data.client_post_id;
+        }
+
         if (data.media && data.media.length > 0) {
             const formData = new FormData();
             formData.append('title', data.title);
@@ -255,6 +261,7 @@ class ApiClient {
             if (data.latitude !== undefined && data.latitude !== null) formData.append('latitude', String(data.latitude));
             if (data.longitude !== undefined && data.longitude !== null) formData.append('longitude', String(data.longitude));
             if (data.is_remote !== undefined) formData.append('is_remote', String(data.is_remote));
+            if (data.client_post_id) formData.append('client_post_id', data.client_post_id);
 
             // Send arrays as JSON strings to keep parsing consistent for multipart.
             if (data.requirements?.length) {
@@ -270,20 +277,27 @@ class ApiClient {
 
             return this.request<any>('/posts/create/', {
                 method: 'POST',
+                headers,
                 body: formData,
             });
         }
 
         return this.request<any>('/posts/create/', {
             method: 'POST',
+            headers,
             body: JSON.stringify(data),
         });
     }
 
-    async toggleLike(postId: string) {
-        return this.request<{ liked: boolean }>(`/posts/${postId}/like/`, {
+    async toggleLike(postId: string, action?: 'like' | 'unlike' | 'toggle') {
+        return this.request<{ liked: boolean; likes_count: number }>(`/posts/${postId}/like/`, {
             method: 'POST',
+            body: action ? JSON.stringify({ action }) : undefined,
         });
+    }
+
+    async likePost(postId: string, action?: 'like' | 'unlike' | 'toggle') {
+        return this.toggleLike(postId, action);
     }
 
     async followUser(targetUserId: string) {
@@ -535,10 +549,21 @@ class ApiClient {
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    async addComment(postId: string, content: string) {
-        return this.request<any>(`/posts/${postId}/comments/`, {
+    async addComment(postId: string, content: string, clientCommentId?: string) {
+        return this.request<{
+            id: string;
+            user: any;
+            content: string;
+            client_comment_id?: string;
+            created_at: string;
+            post_comments_count?: number;
+        }>(`/posts/${postId}/comments/`, {
             method: 'POST',
-            body: JSON.stringify({ content }),
+            headers: clientCommentId ? { 'Idempotency-Key': clientCommentId } : undefined,
+            body: JSON.stringify({
+                content,
+                ...(clientCommentId ? { client_comment_id: clientCommentId } : {}),
+            }),
         });
     }
 

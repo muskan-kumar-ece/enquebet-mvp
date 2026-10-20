@@ -132,13 +132,14 @@ class CreatePostSerializer(serializers.ModelSerializer):
     requirements = FlexibleStringListField(child=serializers.CharField(), write_only=True, required=False)
     tags = FlexibleStringListField(child=serializers.CharField(), write_only=True, required=False)
     attachment_url = serializers.URLField(write_only=True, required=False, allow_blank=True)
+    client_post_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
 
     class Meta:
         model = Post
         fields = [
             'title', 'description', 'category', 'view_type',
             'location', 'college', 'city', 'latitude', 'longitude', 'is_remote',
-            'requirements', 'tags', 'attachment_url'
+            'requirements', 'tags', 'attachment_url', 'client_post_id'
         ]
 
     def create(self, validated_data):
@@ -169,8 +170,9 @@ class CreatePostSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    client_comment_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
     
     class Meta:
         model = Comment
-        fields = ['id', 'user', 'content', 'created_at']
+        fields = ['id', 'user', 'content', 'client_comment_id', 'created_at']
         read_only_fields = ['id', 'created_at']

@@ -6,6 +6,7 @@ import { Heart, MessageCircle, Share2, Users, Bookmark, MoreVertical, Flag, MapP
 import { api } from '@/lib/api';
 import { formatDistance } from '@/lib/geo';
 import toast from 'react-hot-toast';
+import PostMediaGallery from '@/components/ui/PostMediaGallery';
 
 interface PostCardProps {
     id: string;
@@ -20,6 +21,7 @@ interface PostCardProps {
     is_liked?: boolean;
     is_saved?: boolean;
     image?: string;
+    images?: string[];
     city?: string;
     distance_km?: number | null;
     is_remote?: boolean;
@@ -42,6 +44,7 @@ export default function PostCard({
     is_liked: initialIsLiked = false,
     is_saved: initialIsSaved = false,
     image,
+    images,
     city,
     distance_km,
     is_remote,
@@ -53,6 +56,7 @@ export default function PostCard({
     const [likes, setLikes] = useState(initialLikes);
     const [isLiked, setIsLiked] = useState(initialIsLiked);
     const [isSaved, setIsSaved] = useState(initialIsSaved);
+    const inFlightLikeRef = useRef(false);
 
     // Sync state with prop updates (e.g. parent re-fetches data)
     useEffect(() => { setLikes(initialLikes); }, [initialLikes]);
@@ -87,13 +91,27 @@ export default function PostCard({
     const handleLike = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        if (inFlightLikeRef.current) return;
+        inFlightLikeRef.current = true;
+
+        const nextLiked = !isLiked;
+        const prevLikes = likes;
+        // Clamped optimistic update
+        setIsLiked(nextLiked);
+        setLikes(nextLiked ? prevLikes + 1 : Math.max(0, prevLikes - 1));
 
         try {
-            const result = await api.toggleLike(id);
+            const result = await api.toggleLike(id, nextLiked ? 'like' : 'unlike');
             setIsLiked(result.liked);
-            setLikes(result.liked ? likes + 1 : likes - 1);
+            if (typeof result.likes_count === 'number') {
+                setLikes(result.likes_count);
+            }
         } catch (err) {
+            setIsLiked(!nextLiked);
+            setLikes(prevLikes);
             console.error('Failed to like post:', err);
+        } finally {
+            inFlightLikeRef.current = false;
         }
     };
 
@@ -262,16 +280,11 @@ export default function PostCard({
                 <h2 className="text-lg font-bold mb-1.5 leading-snug">{title}</h2>
                 <p className="text-text-secondary text-[0.9375rem] mb-4 line-clamp-2 leading-relaxed">{description}</p>
 
-                {/* Post Image */}
-                {image && (
-                    <div className="mt-1 mb-4 rounded-xl overflow-hidden border border-[#252533]">
-                        <img
-                            src={image}
-                            alt="Post image"
-                            className="w-full h-auto max-h-[500px] object-cover hover:scale-[1.01] transition-transform duration-300"
-                        />
-                    </div>
-                )}
+                {/* Post Media Gallery */}
+                <PostMediaGallery
+                    images={images && images.length > 0 ? images : (image ? [image] : [])}
+                    altTitle={title}
+                />
 
                 {/* Tags */}
                 {normalizedTags.length > 0 && (

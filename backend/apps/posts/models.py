@@ -26,6 +26,7 @@ class Post(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     is_remote = models.BooleanField(default=False)
+    client_post_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -34,6 +35,7 @@ class Post(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user']),
+            models.Index(fields=['user', 'client_post_id']),
             models.Index(fields=['view_type', '-created_at']),
             models.Index(fields=['location', '-created_at']),
             models.Index(fields=['college', '-created_at']),
@@ -119,6 +121,7 @@ class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     content = models.TextField()
+    client_comment_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -126,6 +129,7 @@ class Comment(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['post']),
+            models.Index(fields=['user', 'client_comment_id']),
         ]
 
 

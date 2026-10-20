@@ -488,3 +488,114 @@ class GeoRippleFeedTests(APITestCase):
         titles = [p['title'] for p in results]
         self.assertIn('Open Source Remote Library', titles)
 
+
+class PostReliabilityAndIdempotencyTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='builder@example.com',
+            username='builder',
+            password='Password123!',
+            full_name='Builder One'
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_post_creation_idempotency_returns_existing(self):
+        """Retrying post creation with the same client_post_id returns existing post without duplicates."""
+        payload = {
+            'title': 'Autonomous Drone Project',
+            'description': 'Hardware + AI drone navigation platform',
+            'category': 'Robotics',
+            'view_type': 'public',
+            'client_post_id': 'drone-idemp-uuid-1',
+        }
+
+        # 1. First submission
+        res1 = self.client.post('/api/v1/posts/create/', payload, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        post_id_1 = res1.data['id']
+
+        # 2. Replay with identical client_post_id
+        res2 = self.client.post('/api/v1/posts/create/', payload, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        post_id_2 = res2.data['id']
+
+        self.assertEqual(post_id_1, post_id_2)
+        # Database must only have exactly 1 post for this client_post_id
+        self.assertEqual(Post.objects.filter(user=self.user, client_post_id='drone-idemp-uuid-1').count(), 1)
+
+    def test_like_idempotency_and_canonical_counts(self):
+        """Likes support explicit action ('like' | 'unlike' | 'toggle') and return canonical likes_count."""
+        author = User.objects.create_user(email='other@example.com', username='other', password='Pass123!')
+        post = Post.objects.create(user=author, title='Project X', description='Desc', category='Tech', view_type='public')
+
+        # 1. Explicit 'like'
+        res = self.client.post(f'/api/v1/posts/{post.id}/like/', {'action': 'like'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['liked'], True)
+        self.assertEqual(res.data['likes_count'], 1)
+
+        # 2. Repeat 'like' (should be idempotent, count remains 1, liked remains True)
+        res_repeat = self.client.post(f'/api/v1/posts/{post.id}/like/', {'action': 'like'}, format='json')
+        self.assertEqual(res_repeat.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_repeat.data['liked'], True)
+        self.assertEqual(res_repeat.data['likes_count'], 1)
+
+        # 3. Explicit 'unlike'
+        res_unlike = self.client.post(f'/api/v1/posts/{post.id}/like/', {'action': 'unlike'}, format='json')
+        self.assertEqual(res_unlike.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_unlike.data['liked'], False)
+        self.assertEqual(res_unlike.data['likes_count'], 0)
+
+        # 4. Repeat 'unlike' (should be idempotent, count stays clamped at 0)
+        res_unlike_repeat = self.client.post(f'/api/v1/posts/{post.id}/like/', {'action': 'unlike'}, format='json')
+        self.assertEqual(res_unlike_repeat.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_unlike_repeat.data['liked'], False)
+        self.assertEqual(res_unlike_repeat.data['likes_count'], 0)
+
+    def test_comment_idempotency_and_count(self):
+        """Comments support client_comment_id idempotency and return post_comments_count."""
+        author = User.objects.create_user(email='auth2@example.com', username='auth2', password='Pass123!')
+        post = Post.objects.create(user=author, title='Project Y', description='Desc', category='Tech', view_type='public')
+
+        payload = {
+            'content': 'Excited to contribute to this!',
+            'client_comment_id': 'comment-uuid-777',
+        }
+
+        # 1. First comment creation
+        res1 = self.client.post(f'/api/v1/posts/{post.id}/comments/', payload, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res1.data['post_comments_count'], 1)
+        comment_id_1 = res1.data['id']
+
+        # 2. Replay same client_comment_id
+        res2 = self.client.post(f'/api/v1/posts/{post.id}/comments/', payload, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res2.data['post_comments_count'], 1)
+        self.assertEqual(res2.data['id'], comment_id_1)
+
+        # Comment count in database remains 1
+        self.assertEqual(Comment.objects.filter(post=post).count(), 1)
+
+    def test_media_upload_limits(self):
+        """Posts reject more than 6 media attachments."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        media_files = [
+            SimpleUploadedFile(f"photo_{i}.png", b"fake-png-data", content_type="image/png")
+            for i in range(7)
+        ]
+
+        payload = {
+            'title': 'Too Many Media Files',
+            'description': 'Attempting 7 files',
+            'category': 'Tech',
+            'view_type': 'public',
+            'media': media_files,
+        }
+
+        res = self.client.post('/api/v1/posts/create/', payload, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('media', res.data)
+
+

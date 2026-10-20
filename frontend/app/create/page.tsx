@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, MapPin, Globe, GraduationCap, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -12,6 +12,10 @@ import toast from 'react-hot-toast';
 export default function CreatePostPage() {
     const router = useRouter();
     const { user } = useRequireAuth();
+    const isSubmittingRef = useRef(false);
+    const clientPostIdRef = useRef<string>(
+        typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `post_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    );
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -61,6 +65,8 @@ export default function CreatePostPage() {
     };
 
     const submitPost = useCallback(async () => {
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
         setError('');
         setLoading(true);
 
@@ -74,12 +80,14 @@ export default function CreatePostPage() {
             await api.createPost({
                 ...cleanedData,
                 media: mediaFiles,
+                client_post_id: clientPostIdRef.current,
             });
 
             toast.success('Post created successfully!');
             router.push('/');
         } catch (err: any) {
             setError(err.message || 'Failed to create post');
+            isSubmittingRef.current = false;
         } finally {
             setLoading(false);
         }

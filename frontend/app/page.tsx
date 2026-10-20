@@ -302,13 +302,14 @@ export default function HomePage() {
       ) : (
         <div className="flex flex-col gap-4 md:gap-6 w-full mt-4">
           {posts.map((post) => {
-            const imageUrl =
-              post.image ||
-              post.image_url ||
-              post.media ||
-              (post.attachments && post.attachments.length > 0
-                ? post.attachments.find((a: any) => a.file_type === 'image')?.file_url
-                : undefined);
+            const imageAttachments: string[] = (post.attachments || [])
+              .filter((a: any) => a.file_type === 'image' && a.file_url)
+              .map((a: any) => a.file_url);
+
+            const directImage = post.image || post.image_url || (typeof post.media === 'string' ? post.media : undefined);
+            const allImages = imageAttachments.length > 0
+              ? imageAttachments
+              : (directImage ? [directImage] : []);
 
             return (
               <PostCard
@@ -324,7 +325,8 @@ export default function HomePage() {
                 comments={post.comments_count || 0}
                 is_liked={post.is_liked || false}
                 is_saved={post.is_saved || false}
-                image={imageUrl}
+                images={allImages}
+                image={allImages[0]}
                 city={post.city}
                 distance_km={post.distance_km}
                 is_remote={post.is_remote}

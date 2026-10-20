@@ -488,14 +488,34 @@ class CreatePostView(generics.CreateAPIView):
         return request.build_absolute_uri(storage.url(saved_name))
 
     def create(self, request, *args, **kwargs):
+        # 1. Idempotency check: if client_post_id is provided, replay existing post
+        client_post_id = (
+            request.headers.get('Idempotency-Key') or
+            request.data.get('client_post_id') or
+            ''
+        ).strip()
+
+        if client_post_id:
+            existing_post = Post.objects.filter(user=request.user, client_post_id=client_post_id).first()
+            if existing_post:
+                data = PostSerializer(existing_post, context={'request': request}).data
+                return Response(data, status=status.HTTP_200_OK)
+
+        # 2. Upload size & count validation
+        media_files = request.FILES.getlist('media')
+        if len(media_files) > 6:
+            raise ValidationError({'media': 'Maximum 6 media files allowed per post.'})
+        for file_obj in media_files:
+            if getattr(file_obj, 'size', 0) > 10 * 1024 * 1024:
+                raise ValidationError({'media': f"File '{getattr(file_obj, 'name', 'file')}' exceeds the 10MB size limit."})
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         # Handle media upload atomically: if upload fails, rollback post creation.
         with transaction.atomic():
-            post = serializer.save(user=request.user)
+            post = serializer.save(user=request.user, client_post_id=client_post_id or None)
 
-            media_files = request.FILES.getlist('media')
             for file_obj in media_files:
                 # Prefer Cloudinary when configured, but fallback to local storage for dev/test reliability.
                 secure_url = None
@@ -543,39 +563,67 @@ class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class LikePostView(APIView):
-    """Like or unlike a post"""
+    """Like or unlike a post, returning canonical likes_count and liked state."""
     permission_classes = [IsAuthenticated]
     
     def post(self, request, post_id):
-        try:
-            post = Post.objects.get(id=post_id)
-        except Post.DoesNotExist:
-            return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        like, created = Like.objects.get_or_create(post=post, user=request.user)
-        
-        if not created:
-            # Unlike
-            like.delete()
-            return Response({'liked': False})
-        
-        # Create notification for post owner
-        if post.user != request.user:
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                user=post.user,
-                sender=request.user,
-                type='like',
-                reference_id=post.id,
-                message=f"{request.user.username} liked your post"
-            )
-        
-        return Response({'liked': True})
+        action = request.data.get('action', 'toggle') if isinstance(request.data, dict) else 'toggle'
+        with transaction.atomic():
+            try:
+                post = Post.objects.select_for_update().get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            existing_like = Like.objects.filter(post=post, user=request.user).first()
+            
+            if action == 'unlike':
+                if existing_like:
+                    existing_like.delete()
+                liked = False
+            elif action == 'like':
+                if not existing_like:
+                    Like.objects.create(post=post, user=request.user)
+                    if post.user != request.user:
+                        from apps.notifications.models import Notification
+                        Notification.objects.create(
+                            user=post.user,
+                            sender=request.user,
+                            type='like',
+                            reference_id=post.id,
+                            message=f"{request.user.username} liked your post"
+                        )
+                liked = True
+            else:  # toggle
+                if existing_like:
+                    existing_like.delete()
+                    liked = False
+                else:
+                    Like.objects.create(post=post, user=request.user)
+                    if post.user != request.user:
+                        from apps.notifications.models import Notification
+                        Notification.objects.create(
+                            user=post.user,
+                            sender=request.user,
+                            type='like',
+                            reference_id=post.id,
+                            message=f"{request.user.username} liked your post"
+                        )
+                    liked = True
+
+            likes_count = post.likes.count()
+
+        return Response({'liked': liked, 'likes_count': likes_count})
 
     def delete(self, request, post_id):
         """Unlike a post (explicit DELETE, per spec)."""
-        Like.objects.filter(post_id=post_id, user=request.user).delete()
-        return Response({'liked': False})
+        with transaction.atomic():
+            try:
+                post = Post.objects.select_for_update().get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            Like.objects.filter(post=post, user=request.user).delete()
+            likes_count = post.likes.count()
+        return Response({'liked': False, 'likes_count': likes_count})
 
 
 class UnlikePostView(APIView):
@@ -583,8 +631,14 @@ class UnlikePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, post_id):
-        Like.objects.filter(post_id=post_id, user=request.user).delete()
-        return Response({'liked': False})
+        with transaction.atomic():
+            try:
+                post = Post.objects.select_for_update().get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            Like.objects.filter(post=post, user=request.user).delete()
+            likes_count = post.likes.count()
+        return Response({'liked': False, 'likes_count': likes_count})
 
 
 class PostJoinView(APIView):
@@ -674,7 +728,7 @@ class IsCommentOwnerOrReadOnly(BasePermission):
 
 
 class CommentListCreateView(generics.ListCreateAPIView):
-    """Get comments for a post or create new comment"""
+    """Get comments for a post or create new comment with idempotency and canonical counts."""
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     
@@ -682,25 +736,53 @@ class CommentListCreateView(generics.ListCreateAPIView):
         post_id = self.kwargs['post_id']
         return Comment.objects.filter(post_id=post_id).select_related('user')
     
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         post_id = self.kwargs['post_id']
         try:
             post = Post.objects.get(id=post_id)
         except Post.DoesNotExist:
-            from rest_framework.exceptions import NotFound
-            raise NotFound('Post not found')
-        serializer.save(user=self.request.user, post=post)
-        
-        # Create notification for post owner
-        if post.user != self.request.user:
+            return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        client_comment_id = (
+            request.headers.get('Idempotency-Key') or
+            request.data.get('client_comment_id') or
+            ''
+        ).strip()
+
+        if client_comment_id:
+            existing = Comment.objects.filter(
+                post=post, user=request.user, client_comment_id=client_comment_id
+            ).select_related('user').first()
+            if existing:
+                data = self.get_serializer(existing).data
+                data['post_comments_count'] = post.comments.count()
+                return Response(data, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            comment = serializer.save(
+                user=request.user,
+                post=post,
+                client_comment_id=client_comment_id or None,
+            )
+            comments_count = post.comments.count()
+
+        if post.user != request.user:
             from apps.notifications.models import Notification
             Notification.objects.create(
                 user=post.user,
-                sender=self.request.user,
+                sender=request.user,
                 type='comment',
                 reference_id=post.id,
-                message=f"{self.request.user.username} commented on your post"
+                message=f"{request.user.username} commented on your post"
             )
+
+        data = self.get_serializer(comment).data
+        data['post_comments_count'] = comments_count
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class CommentDeleteView(generics.DestroyAPIView):
