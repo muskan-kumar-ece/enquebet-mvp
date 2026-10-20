@@ -108,6 +108,7 @@ def record_user_session(request, user, refresh_token=None):
 
 class RegisterView(APIView):
     """User registration"""
+    authentication_classes = []
     permission_classes = [AllowAny]
     
     def post(self, request):
@@ -120,7 +121,7 @@ class RegisterView(APIView):
             record_user_session(request, user, refresh)
             
             return Response({
-                'user': UserSerializer(user).data,
+                'user': UserSerializer(user, context={'request': request}).data,
                 'access': str(refresh.access_token),
                 'refresh': str(refresh)
             }, status=status.HTTP_201_CREATED)
@@ -129,28 +130,38 @@ class RegisterView(APIView):
 
 
 class LoginView(APIView):
-    """User login"""
+    """User login supporting email or username, case-insensitive, with stale token protection."""
+    authentication_classes = []
     permission_classes = [AllowAny]
     
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
-            user = authenticate(
-                email=serializer.validated_data['email'],
-                password=serializer.validated_data['password']
-            )
-            
-            if user:
+            raw_id = serializer.validated_data.get('email') or serializer.validated_data.get('username') or ''
+            identifier = raw_id.strip()
+            password = serializer.validated_data.get('password') or ''
+
+            # Case-insensitive lookup by email or username
+            user = User.objects.filter(
+                models.Q(email__iexact=identifier) | models.Q(username__iexact=identifier)
+            ).first()
+
+            if user and user.check_password(password):
+                if not user.is_active:
+                    return Response(
+                        {'error': 'This account has been deactivated. Please contact support.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
                 refresh = RefreshToken.for_user(user)
                 record_user_session(request, user, refresh)
                 return Response({
-                    'user': UserSerializer(user).data,
+                    'user': UserSerializer(user, context={'request': request}).data,
                     'access': str(refresh.access_token),
                     'refresh': str(refresh)
                 })
             
             return Response(
-                {'error': 'Invalid credentials'},
+                {'error': 'Invalid email/username or password. Please verify your credentials.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         

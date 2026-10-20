@@ -125,7 +125,11 @@ class ApiClient {
             headers['Content-Type'] = 'application/json';
         }
 
-        if (this.token) {
+        const isAuthEndpoint = endpoint.startsWith('/auth/login/') ||
+            endpoint.startsWith('/auth/register/') ||
+            endpoint.startsWith('/auth/refresh/');
+
+        if (this.token && !isAuthEndpoint) {
             headers['Authorization'] = `Bearer ${this.token}`;
         }
 
@@ -191,6 +195,7 @@ class ApiClient {
 
     // Auth endpoints
     async register(data: { email: string; username: string; full_name: string; password: string; password_confirm: string }) {
+        this.clearToken();
         return this.request<{ user: any; access: string; refresh: string }>('/auth/register/', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -198,6 +203,7 @@ class ApiClient {
     }
 
     async login(data: { email: string; password: string }) {
+        this.clearToken();
         return this.request<{ user: any; access: string; refresh: string }>('/auth/login/', {
             method: 'POST',
             body: JSON.stringify(data),

@@ -255,22 +255,38 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data['password'] != data['password_confirm']:
             raise serializers.ValidationError("Passwords do not match")
+        if 'email' in data:
+            data['email'] = data['email'].strip().lower()
+            if User.objects.filter(email__iexact=data['email']).exists():
+                raise serializers.ValidationError({"email": "A user with this email already exists."})
+        if 'username' in data:
+            data['username'] = data['username'].strip()
+            if User.objects.filter(username__iexact=data['username']).exists():
+                raise serializers.ValidationError({"username": "A user with this username already exists."})
         return data
     
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         user = User.objects.create_user(
-            email=validated_data['email'],
-            username=validated_data['username'],
-            full_name=validated_data['full_name'],
+            email=validated_data['email'].strip().lower(),
+            username=validated_data['username'].strip(),
+            full_name=validated_data['full_name'].strip(),
             password=validated_data['password']
         )
         return user
 
 
 class UserLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.CharField(required=False, allow_blank=True)
+    username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        email = (attrs.get('email') or '').strip()
+        username = (attrs.get('username') or '').strip()
+        if not email and not username:
+            raise serializers.ValidationError('Please provide your email address or username.')
+        return attrs
 
 
 class UserExperienceSerializer(serializers.ModelSerializer):

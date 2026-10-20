@@ -496,3 +496,53 @@ class SettingsAndSecurityTests(APITestCase):
         # But Alice still follows Charlie
         self.assertTrue(Follower.objects.filter(follower=self.user, following=charlie).exists())
 
+    def test_stale_bearer_token_does_not_break_login_or_register(self):
+        """Stale or expired Bearer tokens in headers must NOT block login or registration."""
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.expired_garbage_token')
+
+        # 1. Registration with stale token in header succeeds
+        reg_payload = {
+            'email': 'new_builder@example.com',
+            'username': 'new_builder',
+            'full_name': 'New Builder',
+            'password': 'SecurePassword123!',
+            'password_confirm': 'SecurePassword123!'
+        }
+        reg_res = self.client.post('/api/v1/auth/register/', reg_payload, format='json')
+        self.assertEqual(reg_res.status_code, status.HTTP_201_CREATED)
+        self.assertIn('access', reg_res.data)
+
+        # 2. Login with stale token in header succeeds
+        login_res = self.client.post('/api/v1/auth/login/', {
+            'email': 'new_builder@example.com',
+            'password': 'SecurePassword123!'
+        }, format='json')
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', login_res.data)
+
+    def test_login_with_username_or_email_case_insensitive(self):
+        """Users can log in with username or email, regardless of letter casing."""
+        User.objects.create_user(
+            email='builder_case@enquebet.org',
+            username='CaseBuilder',
+            password='MyPassword123!',
+            full_name='Case Tester'
+        )
+
+        # Login with email (uppercase variation)
+        res1 = self.client.post('/api/v1/auth/login/', {
+            'email': 'BUILDER_CASE@ENQUEBET.ORG',
+            'password': 'MyPassword123!'
+        }, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertEqual(res1.data['user']['username'], 'CaseBuilder')
+
+        # Login with username (lowercase variation)
+        res2 = self.client.post('/api/v1/auth/login/', {
+            'email': 'casebuilder',
+            'password': 'MyPassword123!'
+        }, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res2.data['user']['username'], 'CaseBuilder')
+
+

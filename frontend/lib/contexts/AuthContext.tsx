@@ -70,16 +70,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (token && storedUser) {
                 try {
+                    api.setToken(token);
                     // Verify token is still valid by fetching profile
                     const profile = await api.getProfile();
                     setUser(profile);
                 } catch (err) {
                     // Token expired or invalid
+                    api.clearToken();
                     localStorage.removeItem('accessToken');
                     localStorage.removeItem('refreshToken');
                     localStorage.removeItem('user');
                     setUser(null);
                 }
+            } else {
+                api.clearToken();
+                setUser(null);
             }
             setLoading(false);
         };
@@ -88,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (email: string, password: string) => {
+        api.clearToken();
         const response = await api.login({ email, password });
         api.setToken(response.access);
         localStorage.setItem('refreshToken', response.refresh);
@@ -96,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const register = async (data: any) => {
+        api.clearToken();
         const response = await api.register(data);
         api.setToken(response.access);
         localStorage.setItem('refreshToken', response.refresh);
