@@ -9,6 +9,7 @@ urlpatterns = [
     path('search/', views.UserSearchView.as_view(), name='user_search'),
     path('me/', views.MeView.as_view(), name='me'),
     path('me/password/', views.MePasswordView.as_view(), name='me_password'),
+    path('me/set-password/', views.SetPasswordView.as_view(), name='me_set_password'),
     path('me/posts/', views.DeleteAllPostsView.as_view(), name='me_posts_delete_all'),
     path('me/sessions/', views.UserSessionsListView.as_view(), name='me_sessions_list'),
     path('me/sessions/revoke-others/', views.UserSessionsRevokeOthersView.as_view(), name='me_sessions_revoke_others'),

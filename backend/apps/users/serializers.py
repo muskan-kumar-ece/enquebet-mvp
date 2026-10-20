@@ -4,7 +4,7 @@ User Serializers for Authentication and Profiles
 import json
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UserSkill, Follower, UserExperience, UserEducation, UserSession, BlockedUser
+from .models import UserSkill, Follower, UserExperience, UserEducation, UserSession, BlockedUser, SocialAccount
 
 User = get_user_model()
 
@@ -75,6 +75,8 @@ class UserSerializer(serializers.ModelSerializer):
     is_private_locked = serializers.SerializerMethodField()
     reputation_tier = serializers.SerializerMethodField()
     avatar_url = serializers.URLField(source='profile_image', required=False, allow_blank=True)
+    has_usable_password = serializers.SerializerMethodField()
+    connected_providers = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -89,13 +91,15 @@ class UserSerializer(serializers.ModelSerializer):
             'skills', 'skills_detailed', 'followers_count', 'following_count', 'is_following',
             'education', 'projects', 'experience', 'certifications', 'collaboration_preferences',
             'resume_file', 'linkedin_url', 'github_url', 'portfolio_url',
+            'has_usable_password', 'connected_providers',
             'is_staff', 'is_superuser',
             'created_at'
         ]
         read_only_fields = [
             'id', 'created_at', 'verification_level', 'reputation_score',
             'reputation_tier', 'completeness_score', 'is_private_locked',
-            'is_following', 'is_staff', 'is_superuser'
+            'is_following', 'has_usable_password', 'connected_providers',
+            'is_staff', 'is_superuser'
         ]
 
 
@@ -171,7 +175,7 @@ class UserSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         request_user = getattr(request, 'user', None) if request else None
 
-        is_owner = bool(request_user and request_user.is_authenticated and request_user.id == instance.id)
+        is_owner = bool(self.context.get('force_owner') or (request_user and request_user.is_authenticated and request_user.id == instance.id))
         
         # Only expose email to the user themselves
         if not is_owner:
@@ -218,6 +222,20 @@ class UserSerializer(serializers.ModelSerializer):
         if followed_ids is not None:
             return instance.id in followed_ids
         return Follower.objects.filter(follower=request.user, following=instance).exists()
+
+    def get_has_usable_password(self, obj):
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None) if request else None
+        if request_user and request_user.is_authenticated and request_user.id == obj.id:
+            return obj.has_usable_password()
+        return None
+
+    def get_connected_providers(self, obj):
+        request = self.context.get('request')
+        request_user = getattr(request, 'user', None) if request else None
+        if request_user and request_user.is_authenticated and request_user.id == obj.id:
+            return list(obj.social_accounts.values_list('provider', flat=True))
+        return []
 
     def update(self, instance, validated_data):
         # Prevent non-admin users from self-awarding verification or reputation
@@ -393,4 +411,14 @@ class BlockedUserSerializer(serializers.ModelSerializer):
             'blocked_avatar', 'reason', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+
+class SocialAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SocialAccount
+        fields = [
+            'id', 'provider', 'provider_email', 'display_name',
+            'avatar_url', 'created_at', 'updated_at'
+        ]
+        read_only_fields = fields
 

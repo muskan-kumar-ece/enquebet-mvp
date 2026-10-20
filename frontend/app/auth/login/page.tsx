@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { AuthRobot } from '@/components/auth/AuthRobot';
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
 import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -84,6 +85,14 @@ export default function LoginPage() {
                     onSubmit={handleSubmit} 
                     className="card space-y-4 border-border-default/90 shadow-2xl bg-surface-elevation-1/95 backdrop-blur-md relative"
                 >
+                    {/* Social OAuth Sign In (Google & GitHub) */}
+                    <SocialAuthButtons
+                        disabled={loading || isSuccess}
+                        onActionStart={() => {
+                            if (error) setError('');
+                        }}
+                    />
+
                     {/* Email Input */}
                     <div>
                         <label className="block text-xs font-semibold mb-2 uppercase tracking-wider text-text-secondary">

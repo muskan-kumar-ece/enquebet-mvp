@@ -39,6 +39,8 @@ interface User {
     linkedin_url?: string;
     github_url?: string;
     portfolio_url?: string;
+    has_usable_password?: boolean;
+    connected_providers?: string[];
     is_staff?: boolean;
     is_superuser?: boolean;
     role?: string;
@@ -51,6 +53,7 @@ interface AuthContextType {
     isStaff: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (data: any) => Promise<void>;
+    setAuthSession: (session: { user: any; access: string; refresh: string }) => void;
     logout: () => void;
     updateUser: (data: Partial<User>) => void;
 }
@@ -110,6 +113,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(response.user);
     };
 
+    const setAuthSession = (session: { user: any; access: string; refresh: string }) => {
+        api.setToken(session.access);
+        localStorage.setItem('refreshToken', session.refresh);
+        localStorage.setItem('user', JSON.stringify(session.user));
+        setUser(session.user);
+    };
+
     const logout = () => {
         const refresh = localStorage.getItem('refreshToken');
         if (refresh) {
@@ -141,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAdmin = isStaff;
 
     return (
-        <AuthContext.Provider value={{ user, loading, isAdmin, isStaff, login, register, logout, updateUser }}>
+        <AuthContext.Provider value={{ user, loading, isAdmin, isStaff, login, register, setAuthSession, logout, updateUser }}>
             <WebSocketProvider>
                 {children}
             </WebSocketProvider>

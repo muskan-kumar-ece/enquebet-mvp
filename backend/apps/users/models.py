@@ -214,3 +214,41 @@ class BlockedUser(models.Model):
     def __str__(self):
         return f"{self.user.username} blocked {self.blocked_user.username}"
 
+
+class SocialAccount(models.Model):
+    """
+    Connected third-party OAuth provider identities (Google, GitHub).
+    """
+    PROVIDER_GOOGLE = 'google'
+    PROVIDER_GITHUB = 'github'
+    PROVIDER_CHOICES = [
+        (PROVIDER_GOOGLE, 'Google'),
+        (PROVIDER_GITHUB, 'GitHub'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_accounts')
+    provider = models.CharField(max_length=30, choices=PROVIDER_CHOICES)
+    uid = models.CharField(max_length=255, help_text="Provider's unique subject or user ID")
+    provider_email = models.EmailField(blank=True, default='')
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    avatar_url = models.URLField(max_length=500, blank=True, default='')
+    extra_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'social_accounts'
+        unique_together = [
+            ('provider', 'uid'),
+            ('user', 'provider'),
+        ]
+        indexes = [
+            models.Index(fields=['provider', 'uid']),
+            models.Index(fields=['user', 'provider']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} ({self.provider}:{self.uid})"
+

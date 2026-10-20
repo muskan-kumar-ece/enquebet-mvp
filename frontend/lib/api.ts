@@ -227,6 +227,33 @@ class ApiClient {
         });
     }
 
+    // OAuth 2.0 endpoints
+    async loginWithGoogle(credential: string) {
+        this.clearToken();
+        return this.request<{ user: any; access: string; refresh: string; created: boolean; provider: string }>('/auth/oauth/google/', {
+            method: 'POST',
+            body: JSON.stringify({ credential }),
+        });
+    }
+
+    async loginWithGithub(code: string, redirect_uri?: string) {
+        this.clearToken();
+        return this.request<{ user: any; access: string; refresh: string; created: boolean; provider: string }>('/auth/oauth/github/', {
+            method: 'POST',
+            body: JSON.stringify({ code, redirect_uri }),
+        });
+    }
+
+    async getConnectedSocialAccounts() {
+        return this.request<{ accounts: Array<{ id: string; provider: string; provider_email: string; display_name: string; avatar_url: string; created_at: string }>; has_usable_password: boolean }>('/auth/oauth/providers/');
+    }
+
+    async disconnectSocialAccount(provider: string) {
+        return this.request<{ message: string }>(`/auth/oauth/providers/${provider}/`, {
+            method: 'DELETE',
+        });
+    }
+
     // Posts endpoints
     async createPost(data: {
         title: string;
@@ -474,6 +501,13 @@ class ApiClient {
         return this.request<{ message: string }>('/users/me/password/', {
             method: 'PUT',
             body: JSON.stringify({ current_password, new_password }),
+        });
+    }
+
+    async setInitialMasterPassword(new_password: string) {
+        return this.request<{ message: string }>('/users/me/set-password/', {
+            method: 'POST',
+            body: JSON.stringify({ new_password }),
         });
     }
 

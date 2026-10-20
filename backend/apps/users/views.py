@@ -20,11 +20,17 @@ from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
     UserExperienceSerializer, UserEducationSerializer,
     PinnedProofSerializer, DossierPeerReviewSerializer,
-    UserSessionSerializer, BlockedUserSerializer
+    UserSessionSerializer, BlockedUserSerializer, SocialAccountSerializer
 )
-from .models import Follower, UserExperience, UserEducation, UserSession, BlockedUser
+from .models import Follower, UserExperience, UserEducation, UserSession, BlockedUser, SocialAccount
+from .oauth_services import (
+    OAuthError, verify_google_credential, exchange_github_code, get_or_create_oauth_user
+)
 from apps.notifications.models import Notification
 from apps.posts.models import Post
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -168,6 +174,122 @@ class LoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class GoogleOAuthView(APIView):
+    """
+    Authenticate or register a builder via Google Identity Services (ID Token).
+    Endpoint: POST /api/v1/auth/oauth/google/
+    Body: { "credential": "<Google JWT ID Token>" }
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        credential = request.data.get('credential')
+        if not credential:
+            return Response({'error': 'Google credential token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            oauth_data = verify_google_credential(credential)
+            user, created, social_acc = get_or_create_oauth_user(oauth_data)
+        except OAuthError as e:
+            return Response({'error': e.message, 'code': e.code}, status=e.status_code)
+        except Exception as e:
+            logger.error(f"Google OAuth unhandled error: {e}", exc_info=True)
+            return Response({'error': 'Authentication failed. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not user.is_active:
+            return Response({'error': 'This account has been deactivated. Please contact support.'}, status=status.HTTP_403_FORBIDDEN)
+
+        refresh = RefreshToken.for_user(user)
+        record_user_session(request, user, refresh)
+
+        return Response({
+            'user': UserSerializer(user, context={'request': request, 'force_owner': True}).data,
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'created': created,
+            'provider': 'google',
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class GitHubOAuthView(APIView):
+    """
+    Authenticate or register a builder via GitHub OAuth 2.0 Authorization Code exchange.
+    Endpoint: POST /api/v1/auth/oauth/github/
+    Body: { "code": "<GitHub Auth Code>", "redirect_uri": "<optional callback URL>" }
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        code = request.data.get('code')
+        if not code:
+            return Response({'error': 'GitHub authorization code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        redirect_uri = request.data.get('redirect_uri')
+
+        try:
+            oauth_data = exchange_github_code(code, redirect_uri=redirect_uri)
+            user, created, social_acc = get_or_create_oauth_user(oauth_data)
+        except OAuthError as e:
+            return Response({'error': e.message, 'code': e.code}, status=e.status_code)
+        except Exception as e:
+            logger.error(f"GitHub OAuth unhandled error: {e}", exc_info=True)
+            return Response({'error': 'Authentication failed. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not user.is_active:
+            return Response({'error': 'This account has been deactivated. Please contact support.'}, status=status.HTTP_403_FORBIDDEN)
+
+        refresh = RefreshToken.for_user(user)
+        record_user_session(request, user, refresh)
+
+        return Response({
+            'user': UserSerializer(user, context={'request': request, 'force_owner': True}).data,
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'created': created,
+            'provider': 'github',
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class ConnectedAccountsView(APIView):
+    """
+    List connected third-party accounts for the current user and allow unlinking.
+    Endpoint: GET /api/v1/auth/oauth/providers/
+              DELETE /api/v1/auth/oauth/providers/<provider>/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        connected = SocialAccount.objects.filter(user=request.user)
+        serializer = SocialAccountSerializer(connected, many=True)
+        return Response({
+            'accounts': serializer.data,
+            'has_usable_password': request.user.has_usable_password(),
+        })
+
+    def delete(self, request, provider):
+        provider = provider.lower()
+        if provider not in ['google', 'github']:
+            return Response({'error': 'Invalid provider.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Safety check: prevent account lockout
+        # User must either have a usable password OR another connected social provider
+        has_password = request.user.has_usable_password()
+        other_accounts = SocialAccount.objects.filter(user=request.user).exclude(provider=provider).exists()
+
+        if not has_password and not other_accounts:
+            return Response({
+                'error': 'Cannot disconnect your only authentication method. Please set a password first.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted, _ = SocialAccount.objects.filter(user=request.user, provider=provider).delete()
+        if not deleted:
+            return Response({'error': f'{provider.title()} account was not connected.'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'message': f'{provider.title()} account disconnected successfully.'})
+
+
 class WebSocketTicketView(APIView):
     """
     Generate an ephemeral single-use ticket for authenticating WebSockets.
@@ -299,6 +421,34 @@ class MePasswordView(APIView):
         request.user.set_password(new_password)
         request.user.save(update_fields=['password'])
         return Response({'message': 'Password updated successfully'})
+
+
+class SetPasswordView(APIView):
+    """Set master password for OAuth builders who do not have an existing password.
+
+    Spec endpoint:
+      - POST /users/me/set-password/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.has_usable_password():
+            return Response({
+                'error': 'You already have a password set. Please use Change Password instead.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        new_password = request.data.get('new_password') or ''
+        if len(new_password) < 8:
+            return Response({'error': 'Password must be at least 8 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, user=request.user)
+        except DjangoValidationError as e:
+            return Response({'error': e.messages[0] if e.messages else 'Invalid password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        return Response({'message': 'Master password set successfully. You can now also log in using your email and password.'})
 
 
 class DeleteAllPostsView(APIView):
