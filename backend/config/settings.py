@@ -34,10 +34,13 @@ if not SECRET_KEY:
             raise ImproperlyConfigured("SECRET_KEY environment variable is required in production (DEBUG=False).")
     SECRET_KEY = 'django-insecure-dev-only-local-secret-key-enquebet-mvp'
 
-ALLOWED_HOSTS = _get_env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+_default_hosts = 'localhost,127.0.0.1,enquebet.venopai.in,.venopai.in'
+ALLOWED_HOSTS = _get_env_list('ALLOWED_HOSTS', _default_hosts)
 _render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME')
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
+if 'enquebet.venopai.in' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('enquebet.venopai.in')
 
 # Application definition
 INSTALLED_APPS = [
@@ -294,14 +297,25 @@ SIMPLE_JWT = {
 
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').strip().lower() in ('true', '1', 'yes')
-CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
+_default_cors_origins = (
+    'http://localhost:3000,http://127.0.0.1:3000,'
+    'https://enquebet.vercel.app,https://enquebet.venopai.in,http://enquebet.venopai.in,https://venopai.in'
+)
+CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS', _default_cors_origins)
 CORS_ALLOW_CREDENTIALS = True
 
-# Dynamic regexes for preview branches (e.g. *.vercel.app)
-CORS_ALLOWED_ORIGIN_REGEXES = _get_env_list('CORS_ALLOWED_ORIGIN_REGEXES', r'^https://.*\.vercel\.app$')
+# Dynamic regexes for preview branches and brand domains (e.g. *.vercel.app, *.venopai.in)
+_default_cors_regexes = r'^https://.*\.vercel\.app$,^https://.*\.venopai\.in$'
+CORS_ALLOWED_ORIGIN_REGEXES = _get_env_list('CORS_ALLOWED_ORIGIN_REGEXES', _default_cors_regexes)
 
 # CSRF — required since Django 4.0 for cross-origin POST requests
-CSRF_TRUSTED_ORIGINS = _get_env_list('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
+_default_csrf_origins = (
+    'http://localhost:3000,http://127.0.0.1:3000,'
+    'https://enquebet.vercel.app,https://*.vercel.app,'
+    'https://enquebet.venopai.in,http://enquebet.venopai.in,https://venopai.in,https://*.venopai.in,'
+    'https://enquebet-mvp-534x.onrender.com'
+)
+CSRF_TRUSTED_ORIGINS = _get_env_list('CSRF_TRUSTED_ORIGINS', _default_csrf_origins)
 
 # Redis connection string (primary: REDIS_URL, fallback: UPSTASH_REDIS_URL)
 REDIS_URL = _redis_url or 'redis://localhost:6379'
