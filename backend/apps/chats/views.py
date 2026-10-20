@@ -177,12 +177,58 @@ class ConversationMessagesView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         conversation = self._get_conversation_for_user()
-        response = super().list(request, *args, **kwargs)
+        qs = Message.objects.filter(conversation=conversation).select_related('sender')
+
+        q = (request.query_params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(content__icontains=q)
+
+        try:
+            limit = int(request.query_params.get('limit', 50))
+            limit = max(1, min(limit, 100))
+        except (ValueError, TypeError):
+            limit = 50
+
+        before = (request.query_params.get('before') or '').strip()
+        if before:
+            # Handle '+' being unquoted as space in HTTP query strings
+            if ' ' in before and '+' not in before:
+                before = before.replace(' ', '+')
+            try:
+                from django.utils.dateparse import parse_datetime
+                parsed_dt = parse_datetime(before)
+                if parsed_dt:
+                    qs = qs.filter(created_at__lt=parsed_dt)
+                else:
+                    qs = qs.filter(created_at__lt=before)
+            except Exception:
+                pass
+
+        # Keyset pagination: seek limit + 1 items to detect if older messages exist
+        messages_desc = list(qs.order_by('-created_at')[:limit + 1])
+        has_more = len(messages_desc) > limit
+        if has_more:
+            messages_desc = messages_desc[:limit]
+
+        # Chronological ascending order for chat rendering
+        messages_asc = list(reversed(messages_desc))
+        serializer = self.get_serializer(messages_asc, many=True)
+
+        oldest_cursor = messages_asc[0].created_at.isoformat() if messages_asc else None
+        newest_cursor = messages_asc[-1].created_at.isoformat() if messages_asc else None
+
         ConversationMember.objects.filter(
             conversation=conversation,
             user=request.user,
         ).update(last_read_at=timezone.now())
-        return response
+
+        return Response({
+            'results': serializer.data,
+            'has_more': has_more,
+            'oldest_cursor': oldest_cursor,
+            'newest_cursor': newest_cursor,
+            'limit': limit,
+        })
 
     def perform_create(self, serializer):
         conversation = self._get_conversation_for_user()
@@ -260,11 +306,13 @@ class SendMessageAliasView(APIView):
             return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
 
         conversation.save()  # touch updated_at
+        client_msg_id = (request.data.get('client_msg_id') or '').strip()
         message = Message.objects.create(
             conversation=conversation,
             sender=request.user,
             content=content,
             attachment_url=attachment_url,
+            client_msg_id=client_msg_id,
         )
 
         ConversationMember.objects.filter(
@@ -292,7 +340,7 @@ class SendMessageAliasView(APIView):
 
 
 class ConversationWithUserView(APIView):
-    """Spec alias: GET /messages/conversation/{user_id} to get (or create) a DM."""
+    """Spec alias: GET /messages/conversation/{user_id} to lookup an existing DM without side effects."""
 
     permission_classes = [IsAuthenticated]
 
@@ -313,11 +361,12 @@ class ConversationWithUserView(APIView):
         ).first()
 
         if existing:
-            return Response({'conversation_id': str(existing.id)}, status=status.HTTP_200_OK)
+            return Response({
+                'conversation_id': str(existing.id),
+                'exists': True
+            }, status=status.HTTP_200_OK)
 
-        conversation = Conversation.objects.create(name='', is_group=False)
-        now = timezone.now()
-        ConversationMember.objects.create(conversation=conversation, user=request.user, last_read_at=now)
-        ConversationMember.objects.create(conversation=conversation, user=target_user, last_read_at=now)
-
-        return Response({'conversation_id': str(conversation.id)}, status=status.HTTP_201_CREATED)
+        return Response({
+            'exists': False,
+            'message': 'No existing conversation with this user.'
+        }, status=status.HTTP_404_NOT_FOUND)

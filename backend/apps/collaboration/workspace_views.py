@@ -48,7 +48,8 @@ class WorkspaceLookupMixin:
             )
         except (Workspace.DoesNotExist, ValueError):
             post = Post.objects.filter(id=identifier).first()
-            if post:
+            if post and hasattr(self, 'request') and self.request.user.is_authenticated and self.request.user == post.user:
+                # Only the verified post owner may initialize their project workspace on first access
                 workspace, _ = Workspace.objects.get_or_create(post=post)
                 TeamMembership.objects.get_or_create(
                     workspace=workspace,

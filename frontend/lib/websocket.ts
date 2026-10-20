@@ -1,15 +1,17 @@
 /**
  * WebSocketManager — manages a single WebSocket connection with:
- * - JWT token auth via query string (?token=...)
- * - Auto-reconnect with exponential backoff
+ * - Ephemeral single-use ticket auth (?ticket=...) or JWT token fallback (?token=...)
+ * - Auto-reconnect with exponential backoff & fresh ticket retrieval
  * - Simple pub/sub event system
  */
+
+import { api } from '@/lib/api';
 
 type EventHandler = (data: any) => void;
 
 export class WebSocketManager {
     private url: string;
-    private urlBuilder: (() => string) | null;
+    private urlBuilder: (() => Promise<string> | string) | null;
     private ws: WebSocket | null = null;
     private handlers: Map<string, Set<EventHandler>> = new Map();
     private reconnectDelay = 1000;
@@ -17,34 +19,38 @@ export class WebSocketManager {
     private shouldReconnect = true;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    constructor(url: string, urlBuilder?: () => string) {
+    constructor(url: string, urlBuilder?: () => Promise<string> | string) {
         this.url = url;
         this.urlBuilder = urlBuilder || null;
     }
 
-    private _getUrl(): string {
-        // On reconnect, rebuild the URL to pick up a fresh token
+    private async _getUrl(): Promise<string> {
+        // On reconnect, rebuild the URL to pick up a fresh single-use ticket
         if (this.urlBuilder) {
-            this.url = this.urlBuilder();
+            try {
+                this.url = await Promise.resolve(this.urlBuilder());
+            } catch (err) {
+                console.warn('[WS] Error building dynamic URL, using cached url:', err);
+            }
         }
         return this.url;
     }
 
-    connect() {
+    async connect() {
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
 
         this.shouldReconnect = true;
-        this._createSocket();
+        await this._createSocket();
     }
 
-    private _createSocket() {
+    private async _createSocket() {
         try {
-            this.ws = new WebSocket(this._getUrl());
+            const resolvedUrl = await this._getUrl();
+            this.ws = new WebSocket(resolvedUrl);
 
             this.ws.onopen = () => {
-                console.log('[WS] Connected:', this.url);
                 this.reconnectDelay = 1000; // reset backoff
                 this._emit('connected', {});
             };
@@ -61,7 +67,6 @@ export class WebSocketManager {
             };
 
             this.ws.onclose = (event) => {
-                console.log('[WS] Closed:', event.code, event.reason);
                 this._emit('disconnected', { code: event.code });
                 if (this.shouldReconnect && event.code !== 4001 && event.code !== 4003) {
                     this._scheduleReconnect();
@@ -69,8 +74,6 @@ export class WebSocketManager {
             };
 
             this.ws.onerror = () => {
-                // WS errors are non-fatal — connection will be retried automatically
-                console.warn('[WS] Connection error, will retry...');
                 this._emit('error', {});
             };
         } catch (err) {
@@ -83,10 +86,9 @@ export class WebSocketManager {
 
     private _scheduleReconnect() {
         if (this.reconnectTimer) return;
-        console.log(`[WS] Reconnecting in ${this.reconnectDelay}ms...`);
-        this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = setTimeout(async () => {
             this.reconnectTimer = null;
-            this._createSocket();
+            await this._createSocket();
         }, this.reconnectDelay);
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
     }
@@ -131,10 +133,29 @@ export class WebSocketManager {
     }
 }
 
-/** Build WS URL with JWT token in query string */
-export function buildWsUrl(path: string): string {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+/** Build WS URL with ticket or JWT token fallback */
+export function buildWsUrl(path: string, options?: { ticket?: string; token?: string }): string {
+    const ticket = options?.ticket;
+    const token = options?.token ?? (typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null);
     const base = (process.env.NEXT_PUBLIC_WS_URL || 'ws://127.0.0.1:8000').replace(/\/+$/, '');
-    const url = `${base}/${path.replace(/^\//, '')}`;
+    const cleanPath = path.replace(/^\//, '');
+    const url = `${base}/${cleanPath}`;
+
+    if (ticket) {
+        return `${url}?ticket=${encodeURIComponent(ticket)}`;
+    }
     return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+}
+
+/** Resolves an authenticated WS URL using a fresh ephemeral ticket if available, else falling back to token */
+export async function resolveSecureWsUrl(path: string): Promise<string> {
+    try {
+        const ticketRes = await api.getWsTicket();
+        if (ticketRes?.ticket) {
+            return buildWsUrl(path, { ticket: ticketRes.ticket });
+        }
+    } catch {
+        // Fallback to token
+    }
+    return buildWsUrl(path);
 }

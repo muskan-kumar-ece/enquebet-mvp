@@ -11,6 +11,7 @@ urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
     path('logout-all/', views.LogoutAllView.as_view(), name='logout_all'),
+    path('ws-ticket/', views.WebSocketTicketView.as_view(), name='ws_ticket'),
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('users/<str:username>/', views.UserDetailView.as_view(), name='user_detail'),
 ]

@@ -338,6 +338,16 @@ class TeamGovernanceTestCase(TestCase):
         # Verify chat eviction
         self.assertFalse(ConversationMember.objects.filter(conversation=self.conversation, user=self.member).exists())
 
+    def test_team_membership_unique_constraint_enforced(self):
+        """Database enforces unique constraint on (workspace, user) to prevent duplicate memberships."""
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            TeamMembership.objects.create(
+                workspace=self.workspace,
+                user=self.member,
+                role='contributor'
+            )
+
 
 class TasksKanbanTestCase(TestCase):
     def setUp(self):

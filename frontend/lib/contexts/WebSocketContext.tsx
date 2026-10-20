@@ -9,7 +9,7 @@ import {
     ReactNode,
     useCallback,
 } from 'react';
-import { WebSocketManager, buildWsUrl } from '@/lib/websocket';
+import { WebSocketManager, resolveSecureWsUrl } from '@/lib/websocket';
 
 interface WebSocketContextType {
     /** Subscribe to notification events. Returns unsubscribe fn. */
@@ -23,7 +23,7 @@ interface WebSocketContextType {
     /** Connect chat WS to a specific conversation */
     connectChat: (conversationId: string) => void;
     /** Send a chat message to the currently connected conversation */
-    sendChatMessage: (content: string, attachment_url?: string) => void;
+    sendChatMessage: (content: string, attachment_url?: string, client_msg_id?: string) => void;
     /** Broadcast typing indicator */
     sendChatTyping: (isTyping: boolean) => void;
     /** Send read receipt */
@@ -56,8 +56,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         const token = localStorage.getItem('accessToken');
         if (!token) return;
 
-        const wsUrlBuilder = () => buildWsUrl('ws/notifications/');
-        const ws = new WebSocketManager(wsUrlBuilder(), wsUrlBuilder);
+        const wsUrlBuilder = () => resolveSecureWsUrl('ws/notifications/');
+        const ws = new WebSocketManager('', wsUrlBuilder);
         notifWS.current = ws;
         ws.connect();
 
@@ -87,8 +87,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         chatWS.current?.disconnect();
         currentConvoId.current = conversationId;
 
-        const chatUrlBuilder = () => buildWsUrl(`ws/chat/${conversationId}/`);
-        const ws = new WebSocketManager(chatUrlBuilder(), chatUrlBuilder);
+        const chatUrlBuilder = () => resolveSecureWsUrl(`ws/chat/${conversationId}/`);
+        const ws = new WebSocketManager('', chatUrlBuilder);
         chatWS.current = ws;
         ws.connect();
     }, []);
@@ -108,8 +108,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         return chatWS.current.on('chat_read', handler);
     }, []);
 
-    const sendChatMessage = useCallback((content: string, attachment_url?: string) => {
-        chatWS.current?.send({ content, attachment_url });
+    const sendChatMessage = useCallback((content: string, attachment_url?: string, client_msg_id?: string) => {
+        chatWS.current?.send({ content, attachment_url, client_msg_id });
     }, []);
 
     const sendChatTyping = useCallback((isTyping: boolean) => {

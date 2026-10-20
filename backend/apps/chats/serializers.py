@@ -90,7 +90,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = ['id', 'sender', 'content', 'attachment_url', 'is_me', 'created_at']
+        fields = ['id', 'sender', 'content', 'attachment_url', 'client_msg_id', 'is_me', 'created_at']
         read_only_fields = ['id', 'created_at']
 
     def get_is_me(self, obj):

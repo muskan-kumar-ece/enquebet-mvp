@@ -25,6 +25,11 @@ function MessagesContent() {
     const [error, setError] = useState('');
     const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
+    // Keyset cursor pagination states
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [oldestCursor, setOldestCursor] = useState<string | null>(null);
+
     // Real-time typing indicators
     const [isCounterpartyTyping, setIsCounterpartyTyping] = useState(false);
     const [typingUsername, setTypingUsername] = useState<string | undefined>(undefined);
@@ -66,10 +71,17 @@ function MessagesContent() {
         setMobileView('chat');
         setMessages([]);
         setIsCounterpartyTyping(false);
+        setHasMore(false);
+        setOldestCursor(null);
 
         try {
-            const msgs = await api.getMessages(convo.id);
+            const response = await api.getMessages(convo.id, { limit: 50 });
+            const msgs = Array.isArray(response) ? response : (response.results ?? []);
             setMessages(msgs);
+            if (response && !Array.isArray(response)) {
+                setHasMore(Boolean(response.has_more));
+                setOldestCursor(response.oldest_cursor || null);
+            }
         } catch {
             toast.error('Failed to load messages');
         }
@@ -79,23 +91,69 @@ function MessagesContent() {
         sendChatRead();
     };
 
-    // WebSocket Incoming Messages
+    // Load Earlier Messages via Keyset Cursor (Scroll Anchoring)
+    const handleLoadEarlier = async () => {
+        if (!selectedConvo || !oldestCursor || loadingMore) return;
+        setLoadingMore(true);
+
+        try {
+            const response = await api.getMessages(selectedConvo.id, {
+                before: oldestCursor,
+                limit: 50,
+            });
+            const olderMessages = Array.isArray(response) ? response : (response.results ?? []);
+
+            if (response && !Array.isArray(response)) {
+                setHasMore(Boolean(response.has_more));
+                setOldestCursor(response.oldest_cursor || null);
+            } else {
+                setHasMore(false);
+            }
+
+            setMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const filtered = olderMessages.filter((m: any) => !existingIds.has(m.id));
+                return [...filtered, ...prev];
+            });
+        } catch (err: any) {
+            toast.error('Could not load earlier messages');
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    // WebSocket Incoming Messages & Deduplication
     useEffect(() => {
         if (!selectedConvo) return;
         const unsub = onChatMessage((data) => {
             if (data.message) {
+                const incoming = data.message;
                 setMessages((prev) => {
-                    const exists = prev.some((m) => m.id === data.message.id);
-                    return exists ? prev : [...prev, data.message];
+                    // 1. If an optimistic message with matching client_msg_id exists, reconcile it
+                    if (incoming.client_msg_id && prev.some((m) => m.client_msg_id === incoming.client_msg_id || m.id === incoming.client_msg_id)) {
+                        return prev.map((m) =>
+                            m.client_msg_id === incoming.client_msg_id || m.id === incoming.client_msg_id
+                                ? { ...incoming, is_me: m.is_me ?? (incoming.sender?.id === user?.id), status: 'delivered' }
+                                : m
+                        );
+                    }
+
+                    // 2. If message already exists by DB id, do not duplicate
+                    if (prev.some((m) => m.id === incoming.id)) {
+                        return prev;
+                    }
+
+                    return [...prev, { ...incoming, is_me: incoming.sender?.id === user?.id, status: 'delivered' }];
                 });
+
                 // Update last message in sidebar
                 setConversations((prev) =>
-                    prev.map((c) => (c.id === selectedConvo.id ? { ...c, last_message: data.message } : c))
+                    prev.map((c) => (c.id === selectedConvo.id ? { ...c, last_message: incoming } : c))
                 );
             }
         });
         return unsub;
-    }, [selectedConvo, onChatMessage]);
+    }, [selectedConvo, onChatMessage, user?.id]);
 
     // WebSocket Typing Indicator
     useEffect(() => {
@@ -116,21 +174,54 @@ function MessagesContent() {
         return unsub;
     }, [selectedConvo, onChatTyping, user?.id]);
 
-    // Send Message
+    // Send Message with Optimistic UI & Zero Jitter
     const handleSendMessage = async (content: string, attachmentUrl?: string) => {
         if (!selectedConvo) return;
+
+        // Generate client-side tracking ID
+        const clientMsgId = 'client-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now();
+        const optimisticMessage = {
+            id: clientMsgId,
+            client_msg_id: clientMsgId,
+            content,
+            attachment_url: attachmentUrl || '',
+            sender: {
+                id: user?.id,
+                username: user?.username,
+                full_name: user?.full_name,
+            },
+            is_me: true,
+            created_at: new Date().toISOString(),
+            status: 'sending',
+        };
+
+        // Render optimistically immediately
+        setMessages((prev) => [...prev, optimisticMessage]);
+        setConversations((prev) =>
+            prev.map((c) => (c.id === selectedConvo.id ? { ...c, last_message: optimisticMessage } : c))
+        );
+
         try {
-            const sentMessage = await api.sendMessage(selectedConvo.id, content, attachmentUrl);
-            setMessages((prev) => {
-                const exists = prev.some((m) => m.id === sentMessage.id);
-                return exists ? prev : [...prev, sentMessage];
-            });
+            const sentMessage = await api.sendMessage(selectedConvo.id, content, attachmentUrl, clientMsgId);
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.client_msg_id === clientMsgId || m.id === clientMsgId
+                        ? { ...sentMessage, is_me: true, status: 'delivered' }
+                        : m
+                )
+            );
 
             // Update sidebar preview
             setConversations((prev) =>
                 prev.map((c) => (c.id === selectedConvo.id ? { ...c, last_message: sentMessage } : c))
             );
         } catch (err: any) {
+            // Mark optimistic message as failed
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.client_msg_id === clientMsgId ? { ...m, status: 'error' } : m
+                )
+            );
             toast.error(err.message || 'Failed to send message');
         }
     };
@@ -194,6 +285,9 @@ function MessagesContent() {
                             currentUserId={user?.id}
                             isTyping={isCounterpartyTyping}
                             typingUsername={typingUsername}
+                            hasMore={hasMore}
+                            loadingMore={loadingMore}
+                            onLoadEarlier={handleLoadEarlier}
                         />
                         <MessageComposer
                             onSend={handleSendMessage}

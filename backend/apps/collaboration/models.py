@@ -109,6 +109,9 @@ class TeamMembership(models.Model):
 
     class Meta:
         db_table = 'team_memberships'
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'user'], name='unique_workspace_user_membership'),
+        ]
         indexes = [
             models.Index(fields=['workspace', 'status']),
             models.Index(fields=['user', 'status']),

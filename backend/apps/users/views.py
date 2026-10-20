@@ -168,6 +168,22 @@ class LoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class WebSocketTicketView(APIView):
+    """
+    Generate an ephemeral single-use ticket for authenticating WebSockets.
+    Replaces long-lived JWT in query strings.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .ws_ticket import create_ws_ticket, DEFAULT_TICKET_TTL
+        ticket = create_ws_ticket(str(request.user.id), timeout=DEFAULT_TICKET_TTL)
+        return Response({
+            'ticket': ticket,
+            'expires_in': DEFAULT_TICKET_TTL,
+        }, status=status.HTTP_201_CREATED)
+
+
 class ProfileView(generics.RetrieveUpdateAPIView):
     """Get and update user profile"""
     permission_classes = [IsAuthenticated]

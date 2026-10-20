@@ -165,3 +165,68 @@ class ChatsAPITestCase(TestCase):
         # Charlie tries to post message
         post_resp = self.client.post(f'/api/v1/chats/{convo_id}/messages/', {'content': 'Intruder'})
         self.assertEqual(post_resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_ws_ticket_generation_and_single_use_consumption(self):
+        """Authenticated user can request an ephemeral single-use WS ticket."""
+        self.client.force_authenticate(user=self.user1)
+        resp = self.client.post('/api/v1/auth/ws-ticket/')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn('ticket', resp.data)
+        ticket = resp.data['ticket']
+
+        # Consume ticket via validator
+        from apps.users.ws_ticket import validate_and_consume_ws_ticket
+        consumed_user_id = validate_and_consume_ws_ticket(ticket)
+        self.assertEqual(consumed_user_id, str(self.user1.id))
+
+        # Second attempt must return None (single-use burned)
+        second_attempt = validate_and_consume_ws_ticket(ticket)
+        self.assertIsNone(second_attempt)
+
+    def test_cursor_pagination_and_client_msg_id(self):
+        """Keyset cursor pagination limits message volume and tracks client_msg_id."""
+        self.client.force_authenticate(user=self.user1)
+        dm_resp = self.client.post('/api/v1/chats/dm/', {'user_id': str(self.user2.id)})
+        convo_id = dm_resp.data['conversation_id']
+
+        # Send 3 messages with client_msg_id
+        for i in range(3):
+            self.client.post(f'/api/v1/chats/{convo_id}/messages/', {
+                'content': f'Message {i}',
+                'client_msg_id': f'temp-uuid-{i}',
+            })
+
+        # Query first page with limit=2
+        page1 = self.client.get(f'/api/v1/chats/{convo_id}/messages/?limit=2')
+        self.assertEqual(page1.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(page1.data['results']), 2)
+        self.assertTrue(page1.data['has_more'])
+        self.assertIsNotNone(page1.data['oldest_cursor'])
+
+        # Verify client_msg_id is preserved
+        self.assertTrue(any(m['client_msg_id'].startswith('temp-uuid-') for m in page1.data['results']))
+
+        # Query second page using cursor
+        cursor = page1.data['oldest_cursor']
+        page2 = self.client.get(f'/api/v1/chats/{convo_id}/messages/?limit=2&before={cursor}')
+        self.assertEqual(page2.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(page2.data['results']), 1)
+        self.assertFalse(page2.data['has_more'])
+
+    def test_conversation_with_user_safe_get_does_not_create(self):
+        """GET /messages/conversation/{user_id} does not create ghost conversations on 404."""
+        self.client.force_authenticate(user=self.user1)
+        # Check DM with user2 before creation
+        get_resp = self.client.get(f'/api/v1/chats/conversation/{self.user2.id}/')
+        self.assertEqual(get_resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(Conversation.objects.count(), 0)
+
+        # Create DM via POST
+        self.client.post('/api/v1/chats/dm/', {'user_id': str(self.user2.id)})
+        self.assertEqual(Conversation.objects.count(), 1)
+
+        # Now GET returns 200 with conversation_id
+        get_resp2 = self.client.get(f'/api/v1/chats/conversation/{self.user2.id}/')
+        self.assertEqual(get_resp2.status_code, status.HTTP_200_OK)
+        self.assertTrue(get_resp2.data['exists'])
+

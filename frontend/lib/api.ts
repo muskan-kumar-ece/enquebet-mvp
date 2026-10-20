@@ -221,6 +221,12 @@ class ApiClient {
         });
     }
 
+    async getWsTicket(): Promise<{ ticket: string; expires_in: number }> {
+        return this.request<{ ticket: string; expires_in: number }>('/auth/ws-ticket/', {
+            method: 'POST',
+        });
+    }
+
     // Posts endpoints
     async createPost(data: {
         title: string;
@@ -620,19 +626,21 @@ class ApiClient {
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    async getMessages(conversationId: string, opts?: { page?: number; q?: string }) {
+    async getMessages(conversationId: string, opts?: { page?: number; q?: string; before?: string; limit?: number }) {
         const params = new URLSearchParams();
         if (opts?.page && opts.page > 1) params.append('page', String(opts.page));
         if (opts?.q) params.append('q', opts.q);
+        if (opts?.before) params.append('before', opts.before);
+        if (opts?.limit) params.append('limit', String(opts.limit));
         const qs = params.toString();
         const data = await this.request<any>(`/chats/conversations/${conversationId}/messages/${qs ? '?' + qs : ''}`);
-        return Array.isArray(data) ? data : (data.results ?? []);
+        return data;
     }
 
-    async sendMessage(conversationId: string, content: string, attachment_url?: string) {
+    async sendMessage(conversationId: string, content: string, attachment_url?: string, client_msg_id?: string) {
         return this.request<any>(`/chats/conversations/${conversationId}/messages/`, {
             method: 'POST',
-            body: JSON.stringify({ content, attachment_url }),
+            body: JSON.stringify({ content, attachment_url, client_msg_id }),
         });
     }
 

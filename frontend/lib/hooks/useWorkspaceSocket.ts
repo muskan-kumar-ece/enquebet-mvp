@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from 'react';
+import { resolveSecureWsUrl } from '@/lib/websocket';
 
 interface UseWorkspaceSocketProps {
     workspaceId: string;
@@ -22,7 +23,7 @@ export function useWorkspaceSocket({
         onEventRef.current = onEvent;
     }, [onEvent]);
 
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         if (!enabled || !workspaceId || typeof window === 'undefined') return;
 
         const token = localStorage.getItem('accessToken');
@@ -34,15 +35,8 @@ export function useWorkspaceSocket({
             socketRef.current = null;
         }
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // In local development or staging, connect to backend URL
-        const backendHost = process.env.NEXT_PUBLIC_API_URL
-            ? process.env.NEXT_PUBLIC_API_URL.replace(/^http(s)?:\/\//, '').replace(/\/api\/v1\/?$/, '').replace(/\/api\/?$/, '')
-            : window.location.host;
-
-        const wsUrl = `${protocol}//${backendHost}/ws/workspace/${workspaceId}/?token=${encodeURIComponent(token)}`;
-
         try {
+            const wsUrl = await resolveSecureWsUrl(`ws/workspace/${workspaceId}/`);
             const ws = new WebSocket(wsUrl);
             socketRef.current = ws;
 

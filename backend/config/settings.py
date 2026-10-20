@@ -13,7 +13,9 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+def _get_env_list(var_name: str, default: str = '') -> list[str]:
+    raw = os.getenv(var_name, default)
+    return [item.strip().rstrip('/') for item in raw.split(',') if item.strip()]
 
 # Render deployment detection
 IS_RENDER = os.getenv('RENDER', '').strip().lower() in ('true', '1')
@@ -23,20 +25,19 @@ IS_RENDER = os.getenv('RENDER', '').strip().lower() in ('true', '1')
 _default_debug = 'False' if IS_RENDER else 'True'
 DEBUG = os.getenv('DEBUG', _default_debug).strip().lower() in ('true', '1', 'yes')
 
-if not DEBUG and SECRET_KEY == 'django-insecure-change-this-in-production':
-    import sys
-    # Don't fail build/test commands, but fail server boot
-    if not any(arg in sys.argv for arg in ['test', 'collectstatic', 'check', 'makemigrations', 'migrate']):
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured("SECRET_KEY environment variable must be set to a secure value in production (DEBUG=False).")
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if not DEBUG:
+        # Don't fail build/test/migration commands, but strictly fail server boot in production
+        if not any(arg in sys.argv for arg in ['test', 'collectstatic', 'check', 'makemigrations', 'migrate']):
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured("SECRET_KEY environment variable is required in production (DEBUG=False).")
+    SECRET_KEY = 'django-insecure-dev-only-local-secret-key-enquebet-mvp'
 
-_default_hosts = 'localhost,127.0.0.1,enquebet-mvp-534x.onrender.com'
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', _default_hosts).split(',') if h.strip()]
+ALLOWED_HOSTS = _get_env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 _render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME')
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
-if 'enquebet-mvp-534x.onrender.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('enquebet-mvp-534x.onrender.com')
 
 # Application definition
 INSTALLED_APPS = [
@@ -142,6 +143,29 @@ else:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
+    }
+
+# Cache Configuration - Upstash Redis in production; LocMem in tests/dev fallback
+if _is_test:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test-cache',
+        }
+    }
+elif _redis_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_url,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'default-locmem',
         }
     }
 
@@ -269,26 +293,15 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-_default_cors = 'https://enquebet.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
-_cors_raw = os.getenv('CORS_ALLOWED_ORIGINS', _default_cors)
-CORS_ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in _cors_raw.split(',') if o.strip()]
-if 'https://enquebet.vercel.app' not in CORS_ALLOWED_ORIGINS:
-    CORS_ALLOWED_ORIGINS.append('https://enquebet.vercel.app')
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').strip().lower() in ('true', '1', 'yes')
+CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
 CORS_ALLOW_CREDENTIALS = True
 
-# Permit Vercel preview deployments (*.vercel.app)
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.vercel\.app$",
-]
+# Dynamic regexes for preview branches (e.g. *.vercel.app)
+CORS_ALLOWED_ORIGIN_REGEXES = _get_env_list('CORS_ALLOWED_ORIGIN_REGEXES', r'^https://.*\.vercel\.app$')
 
 # CSRF — required since Django 4.0 for cross-origin POST requests
-_default_csrf = 'https://enquebet.vercel.app,https://*.vercel.app,https://enquebet-mvp-534x.onrender.com,http://localhost:3000,http://127.0.0.1:3000'
-_csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS', _default_csrf)
-CSRF_TRUSTED_ORIGINS = [o.strip().rstrip('/') for o in _csrf_raw.split(',') if o.strip()]
-if 'https://enquebet.vercel.app' not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append('https://enquebet.vercel.app')
-if 'https://enquebet-mvp-534x.onrender.com' not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append('https://enquebet-mvp-534x.onrender.com')
+CSRF_TRUSTED_ORIGINS = _get_env_list('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
 
 # Redis connection string (primary: REDIS_URL, fallback: UPSTASH_REDIS_URL)
 REDIS_URL = _redis_url or 'redis://localhost:6379'

@@ -24,13 +24,17 @@ class WorkspaceConsumer(AsyncWebsocketConsumer):
         self.workspace_id = self.scope['url_route']['kwargs']['workspace_id']
         self.group_name = f'workspace_{self.workspace_id}'
 
-        # Authenticate via JWT token in query string
-        token = self._get_token_from_query()
-        if not token:
-            await self.close(code=4001)
-            return
+        # Authenticate via Ephemeral Ticket (preferred) or JWT token in query string
+        params = self._get_query_params()
+        ticket = params.get('ticket')
+        token = params.get('token')
 
-        user = await self._get_user_from_token(token)
+        user = None
+        if ticket:
+            user = await self._get_user_from_ticket(ticket)
+        elif token:
+            user = await self._get_user_from_token(token)
+
         if not user:
             await self.close(code=4001)
             return
@@ -83,10 +87,23 @@ class WorkspaceConsumer(AsyncWebsocketConsumer):
 
     # --- Database Helpers ---
 
-    def _get_token_from_query(self):
+    def _get_query_params(self):
         query_string = self.scope.get('query_string', b'').decode()
-        params = dict(p.split('=') for p in query_string.split('&') if '=' in p)
-        return params.get('token')
+        return dict(p.split('=', 1) for p in query_string.split('&') if '=' in p)
+
+    def _get_token_from_query(self):
+        return self._get_query_params().get('token')
+
+    @database_sync_to_async
+    def _get_user_from_ticket(self, ticket):
+        try:
+            from apps.users.ws_ticket import validate_and_consume_ws_ticket
+            user_id = validate_and_consume_ws_ticket(ticket)
+            if user_id:
+                return User.objects.get(id=user_id)
+        except Exception:
+            return None
+        return None
 
     @database_sync_to_async
     def _get_user_from_token(self, token):

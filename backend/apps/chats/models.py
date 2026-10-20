@@ -45,6 +45,7 @@ class Message(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     content = models.TextField()
     attachment_url = models.URLField(max_length=500, blank=True)
+    client_msg_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -52,6 +53,7 @@ class Message(models.Model):
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['conversation', 'client_msg_id']),
         ]
     
     def __str__(self):
