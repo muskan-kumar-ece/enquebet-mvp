@@ -501,13 +501,36 @@ class CreatePostView(generics.CreateAPIView):
                 data = PostSerializer(existing_post, context={'request': request}).data
                 return Response(data, status=status.HTTP_200_OK)
 
-        # 2. Upload size & count validation
+        # 2. Upload size, count & MIME validation
         media_files = request.FILES.getlist('media')
-        if len(media_files) > 6:
-            raise ValidationError({'media': 'Maximum 6 media files allowed per post.'})
+        if len(media_files) > 10:
+            raise ValidationError({'media': 'Maximum 10 media files allowed per post.'})
+        
+        ALLOWED_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        ALLOWED_VIDEO_MIMES = {'video/mp4', 'video/webm', 'video/quicktime'}
+        ALLOWED_MIMES = ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES
+
         for file_obj in media_files:
-            if getattr(file_obj, 'size', 0) > 10 * 1024 * 1024:
-                raise ValidationError({'media': f"File '{getattr(file_obj, 'name', 'file')}' exceeds the 10MB size limit."})
+            file_size = getattr(file_obj, 'size', 0)
+            if file_size > 20 * 1024 * 1024:
+                raise ValidationError({'media': f"File '{getattr(file_obj, 'name', 'file')}' exceeds the 20MB size limit."})
+
+            content_type = getattr(file_obj, 'content_type', '') or ''
+            if content_type and content_type.lower() not in ALLOWED_MIMES:
+                raise ValidationError({'media': f"File type '{content_type}' is not supported. Allowed: images (JPEG, PNG, WebP, GIF) and videos (MP4, WebM, QuickTime)."})
+
+            # Pillow verification and decompression bomb protection for images
+            if content_type.lower() in ALLOWED_IMAGE_MIMES:
+                try:
+                    from PIL import Image
+                    Image.MAX_IMAGE_PIXELS = 50_000_000
+                    pos = file_obj.tell() if hasattr(file_obj, 'tell') else 0
+                    with Image.open(file_obj) as img:
+                        img.verify()
+                    if hasattr(file_obj, 'seek'):
+                        file_obj.seek(pos)
+                except Exception as exc:
+                    raise ValidationError({'media': f"Corrupted or invalid image file '{getattr(file_obj, 'name', 'file')}': {exc}"})
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -613,6 +636,28 @@ class LikePostView(APIView):
             likes_count = post.likes.count()
 
         return Response({'liked': liked, 'likes_count': likes_count})
+
+    def put(self, request, post_id):
+        """Ensure post is liked (explicit PUT, idempotent)."""
+        with transaction.atomic():
+            try:
+                post = Post.objects.select_for_update().get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if not Like.objects.filter(post=post, user=request.user).exists():
+                Like.objects.create(post=post, user=request.user)
+                if post.user != request.user:
+                    from apps.notifications.models import Notification
+                    Notification.objects.create(
+                        user=post.user,
+                        sender=request.user,
+                        type='like',
+                        reference_id=post.id,
+                        message=f"{request.user.username} liked your post"
+                    )
+            likes_count = post.likes.count()
+        return Response({'liked': True, 'likes_count': likes_count})
 
     def delete(self, request, post_id):
         """Unlike a post (explicit DELETE, per spec)."""

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Users, Check, X, Clock, ChevronRight } from 'lucide-react';
+import { Users, Check, X, Clock, ChevronRight, Briefcase, ExternalLink, Sparkles } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -169,11 +169,46 @@ export default function CollaborationPage() {
                                                 <ChevronRight className="w-3 h-3" />
                                             </button>
 
-                                            {/* Message */}
-                                            {req.message && (
-                                                <p className="text-sm text-text-secondary bg-bg-hover rounded-lg p-3 mb-3">
-                                                    "{req.message}"
-                                                </p>
+                                            {/* Structured Proposal Badges */}
+                                            {(req.role || req.weekly_commitment) && (
+                                                <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                                                    {req.role && (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                            <Briefcase className="w-3 h-3" />
+                                                            {req.role}
+                                                        </span>
+                                                    )}
+                                                    {req.weekly_commitment && (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                            <Clock className="w-3 h-3" />
+                                                            {req.weekly_commitment}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Pitch or Legacy Message */}
+                                            {(req.pitch || req.message) && (
+                                                <div className="bg-bg-hover rounded-xl p-3.5 mb-2.5 border border-border-default/50">
+                                                    <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">
+                                                        {req.pitch || req.message}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Portfolio Link */}
+                                            {req.portfolio_url && (
+                                                <div className="mb-2.5">
+                                                    <a
+                                                        href={req.portfolio_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-xs text-brand-light hover:underline font-medium"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        <span>Portfolio / Proof Link</span>
+                                                    </a>
+                                                </div>
                                             )}
 
                                             <p className="text-text-muted text-xs mb-3">

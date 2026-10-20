@@ -28,6 +28,13 @@ class SendCollaborationRequestView(APIView):
         
         post_id = serializer.validated_data['post_id']
         message = serializer.validated_data.get('message', '')
+        role = serializer.validated_data.get('role', '').strip()
+        pitch = serializer.validated_data.get('pitch', '').strip()
+        weekly_commitment = serializer.validated_data.get('weekly_commitment', '').strip()
+        portfolio_url = serializer.validated_data.get('portfolio_url', '').strip()
+        client_request_id = serializer.validated_data.get('client_request_id', '').strip()
+        if not client_request_id:
+            client_request_id = request.headers.get('Idempotency-Key', '').strip()
         
         try:
             post = Post.objects.select_for_update().get(id=post_id)
@@ -37,6 +44,18 @@ class SendCollaborationRequestView(APIView):
         if post.user == request.user:
             return Response({'error': 'You cannot request to collaborate on your own post'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Idempotency check 1: check if request with this client_request_id was already processed
+        if client_request_id:
+            existing_by_client_id = CollaborationRequest.objects.filter(
+                sender=request.user,
+                client_request_id=client_request_id
+            ).first()
+            if existing_by_client_id:
+                return Response(
+                    CollaborationRequestSerializer(existing_by_client_id).data,
+                    status=status.HTTP_200_OK
+                )
+
         # Check team capacity if workspace already exists
         workspace = getattr(post, 'workspace', None)
         if workspace:
@@ -60,22 +79,52 @@ class SendCollaborationRequestView(APIView):
         if existing_request and existing_request.status == 'pending':
             return Response({'error': 'Request already sent'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Build composite message for backwards compatibility and notification preview
+        composite_lines = []
+        meta_parts = []
+        if role:
+            meta_parts.append(f"Role: {role}")
+        if weekly_commitment:
+            meta_parts.append(f"Commitment: {weekly_commitment}")
+        if meta_parts:
+            composite_lines.append(" | ".join(meta_parts))
+        if pitch:
+            composite_lines.append(pitch)
+        elif message:
+            composite_lines.append(message)
+        if portfolio_url:
+            composite_lines.append(f"Portfolio: {portfolio_url}")
+            
+        final_message = "\n\n".join(composite_lines) if composite_lines else message
+
         # Create (or reopen) request
         if existing_request:
             collab_request = existing_request
             collab_request.receiver = post.user
-            collab_request.message = message
+            collab_request.role = role
+            collab_request.pitch = pitch
+            collab_request.weekly_commitment = weekly_commitment
+            collab_request.portfolio_url = portfolio_url
+            collab_request.client_request_id = client_request_id
+            collab_request.message = final_message
             collab_request.status = 'pending'
-            collab_request.save(update_fields=['receiver', 'message', 'status', 'updated_at'])
+            collab_request.save(update_fields=[
+                'receiver', 'role', 'pitch', 'weekly_commitment',
+                'portfolio_url', 'client_request_id', 'message', 'status', 'updated_at'
+            ])
         else:
             collab_request = CollaborationRequest.objects.create(
                 post=post,
                 sender=request.user,
                 receiver=post.user,
-                message=message
+                role=role,
+                pitch=pitch,
+                weekly_commitment=weekly_commitment,
+                portfolio_url=portfolio_url,
+                client_request_id=client_request_id,
+                message=final_message
             )
 
-        
         # Create notification for post owner
         Notification.objects.create(
             user=post.user,

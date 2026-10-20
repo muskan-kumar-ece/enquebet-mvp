@@ -8,6 +8,7 @@ import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import PostMediaGallery from '@/components/ui/PostMediaGallery';
+import BuildWithModal from '@/components/collaboration/BuildWithModal';
 
 export default function PostDetailPage() {
     const params = useParams();
@@ -20,6 +21,7 @@ export default function PostDetailPage() {
     const [loading, setLoading] = useState(true);
     const [isLiked, setIsLiked] = useState(false);
     const [likesCount, setLikesCount] = useState(0);
+    const [isBuildWithOpen, setIsBuildWithOpen] = useState(false);
     const [sendingRequest, setSendingRequest] = useState(false);
     const [sendingMessage, setSendingMessage] = useState(false);
     const [sendingComment, setSendingComment] = useState(false);
@@ -240,7 +242,26 @@ export default function PostDetailPage() {
                             ? imageAttachments
                             : (post.image || post.image_url ? [post.image || post.image_url] : []);
 
-                        return <PostMediaGallery images={allImages} altTitle={post.title} className="mb-6" />;
+                        return (
+                            <PostMediaGallery
+                                images={allImages}
+                                altTitle={post.title}
+                                className="mb-6"
+                                postId={post.id}
+                                onDoubleTapLike={() => {
+                                    if (!isLiked) {
+                                        setIsLiked(true);
+                                        setLikesCount((prev) => prev + 1);
+                                        api.ensureLiked(post.id).then((res) => {
+                                            setIsLiked(res.liked);
+                                            if (typeof res.likes_count === 'number') {
+                                                setLikesCount(res.likes_count);
+                                            }
+                                        }).catch(() => {});
+                                    }
+                                }}
+                            />
+                        );
                     })()}
 
                     {/* Title & Description */}
@@ -326,8 +347,8 @@ export default function PostDetailPage() {
                         {/* Build With — only for other users' posts */}
                         {!isOwnPost && (
                             <button
-                                onClick={handleCollabRequest}
-                                disabled={sendingRequest || post.has_requested_collaboration}
+                                onClick={() => setIsBuildWithOpen(true)}
+                                disabled={post.has_requested_collaboration}
                                 className={`flex items-center gap-2 transition-colors font-medium ${post.has_requested_collaboration
                                     ? 'text-emerald-400 cursor-default'
                                     : 'text-brand-light hover:text-white'
@@ -341,13 +362,26 @@ export default function PostDetailPage() {
                                 ) : (
                                     <>
                                         <Users className="w-5 h-5" />
-                                        <span>{sendingRequest ? 'Sending...' : 'Build With'}</span>
+                                        <span>Build With</span>
                                     </>
                                 )}
                             </button>
                         )}
                     </div>
                 </div>
+
+                {/* Build With Proposal Modal */}
+                <BuildWithModal
+                    isOpen={isBuildWithOpen}
+                    onClose={() => setIsBuildWithOpen(false)}
+                    postId={post.id}
+                    postTitle={post.title}
+                    postRequirements={post.requirements}
+                    onRequestSent={() => {
+                        setPost((prev: any) => prev ? { ...prev, has_requested_collaboration: true } : prev);
+                        toast.success('Build With proposal submitted!');
+                    }}
+                />
 
                 {/* Comments Section */}
                 <div className="card">

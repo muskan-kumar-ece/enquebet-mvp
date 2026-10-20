@@ -300,6 +300,18 @@ class ApiClient {
         return this.toggleLike(postId, action);
     }
 
+    async ensureLiked(postId: string) {
+        return this.request<{ liked: boolean; likes_count: number }>(`/posts/${postId}/like/`, {
+            method: 'PUT',
+        });
+    }
+
+    async ensureUnliked(postId: string) {
+        return this.request<{ liked: boolean; likes_count: number }>(`/posts/${postId}/like/`, {
+            method: 'DELETE',
+        });
+    }
+
     async followUser(targetUserId: string) {
         return this.request<{ following: boolean; followers_count?: number; following_count?: number }>(`/users/${targetUserId}/follow/`, {
             method: 'POST',
@@ -574,10 +586,38 @@ class ApiClient {
     }
 
     // Collaboration endpoints
-    async sendCollaborationRequest(postId: string, message?: string) {
+    async sendCollaborationRequest(
+        postId: string,
+        data?: string | {
+            message?: string;
+            role?: string;
+            pitch?: string;
+            weekly_commitment?: string;
+            portfolio_url?: string;
+            client_request_id?: string;
+        }
+    ) {
+        const payload: Record<string, any> = { post_id: postId };
+        const headers: Record<string, string> = {};
+
+        if (typeof data === 'string') {
+            payload.message = data;
+        } else if (data && typeof data === 'object') {
+            if (data.message) payload.message = data.message;
+            if (data.role) payload.role = data.role;
+            if (data.pitch) payload.pitch = data.pitch;
+            if (data.weekly_commitment) payload.weekly_commitment = data.weekly_commitment;
+            if (data.portfolio_url) payload.portfolio_url = data.portfolio_url;
+            if (data.client_request_id) {
+                payload.client_request_id = data.client_request_id;
+                headers['Idempotency-Key'] = data.client_request_id;
+            }
+        }
+
         return this.request<any>('/collaboration/request/', {
             method: 'POST',
-            body: JSON.stringify({ post_id: postId, message }),
+            headers: Object.keys(headers).length > 0 ? headers : undefined,
+            body: JSON.stringify(payload),
         });
     }
 

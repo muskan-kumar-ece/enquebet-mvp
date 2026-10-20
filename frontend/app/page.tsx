@@ -321,6 +321,7 @@ export default function HomePage() {
                 title={post.title}
                 description={post.description}
                 tags={post.tags || []}
+                requirements={post.requirements || []}
                 likes={post.likes_count || 0}
                 comments={post.comments_count || 0}
                 is_liked={post.is_liked || false}

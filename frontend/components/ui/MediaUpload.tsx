@@ -12,8 +12,8 @@ interface MediaUploadProps {
     maxSizePerFileBytes?: number;
 }
 
-const DEFAULT_MAX_FILES = 6;
-const DEFAULT_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILES = 10;
+const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
 function formatBytes(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

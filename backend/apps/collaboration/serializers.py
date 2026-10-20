@@ -14,10 +14,19 @@ class CollaborationRequestSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CollaborationRequest
-        fields = ['id', 'post', 'sender', 'receiver', 'status', 'message', 'created_at']
+        fields = [
+            'id', 'post', 'sender', 'receiver', 'status',
+            'role', 'pitch', 'weekly_commitment', 'portfolio_url',
+            'client_request_id', 'message', 'created_at'
+        ]
         read_only_fields = ['id', 'created_at', 'status']
 
 
 class CreateCollaborationRequestSerializer(serializers.Serializer):
     post_id = serializers.UUIDField()
+    role = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    pitch = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    weekly_commitment = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    portfolio_url = serializers.URLField(required=False, allow_blank=True, max_length=500)
+    client_request_id = serializers.CharField(required=False, allow_blank=True, max_length=128)
     message = serializers.CharField(required=False, allow_blank=True)

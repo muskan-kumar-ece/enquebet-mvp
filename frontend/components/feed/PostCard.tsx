@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { formatDistance } from '@/lib/geo';
 import toast from 'react-hot-toast';
 import PostMediaGallery from '@/components/ui/PostMediaGallery';
+import BuildWithModal from '@/components/collaboration/BuildWithModal';
 
 interface PostCardProps {
     id: string;
@@ -16,6 +17,7 @@ interface PostCardProps {
     title: string;
     description: string;
     tags?: (string | { id: string; tag_name: string })[];
+    requirements?: string[] | { role?: string; skill?: string }[];
     likes: number;
     comments: number;
     is_liked?: boolean;
@@ -39,6 +41,7 @@ export default function PostCard({
     title,
     description,
     tags = [],
+    requirements = [],
     likes: initialLikes,
     comments,
     is_liked: initialIsLiked = false,
@@ -56,6 +59,7 @@ export default function PostCard({
     const [likes, setLikes] = useState(initialLikes);
     const [isLiked, setIsLiked] = useState(initialIsLiked);
     const [isSaved, setIsSaved] = useState(initialIsSaved);
+    const [isBuildWithOpen, setIsBuildWithOpen] = useState(false);
     const inFlightLikeRef = useRef(false);
 
     // Sync state with prop updates (e.g. parent re-fetches data)
@@ -135,16 +139,10 @@ export default function PostCard({
         }
     };
 
-    const handleBuildWith = async (e: React.MouseEvent) => {
+    const handleBuildWith = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-
-        try {
-            await api.sendCollaborationRequest(id, 'I would love to collaborate!');
-            toast.success('Collaboration request sent!');
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to send request');
-        }
+        setIsBuildWithOpen(true);
     };
 
     const handleShare = async (e: React.MouseEvent) => {
@@ -198,10 +196,10 @@ export default function PostCard({
     };
 
     return (
-        <Link href={`/posts/${id}`}>
-            <div className="w-full card p-5 hover:border-brand-primary/40 hover:shadow-[0_4px_24px_rgba(24,100,255,0.08)] transition-all duration-200 cursor-pointer relative group">
-                {/* Author & Options */}
-                <div className="flex items-center gap-3 mb-4">
+        <div className="w-full card p-5 hover:border-brand-primary/40 hover:shadow-[0_4px_24px_rgba(24,100,255,0.08)] transition-all duration-200 relative group">
+            {/* Author & Options */}
+            <div className="flex items-center gap-3 mb-4">
+                <Link href={`/posts/${id}`} className="flex items-center gap-3 flex-1 min-w-0 group/author">
                     {authorAvatar ? (
                         <img
                             src={authorAvatar}
@@ -214,9 +212,10 @@ export default function PostCard({
                         </div>
                     )}
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-[0.9375rem] text-text-primary group-hover:text-brand-light transition-colors">{author}</h3>
+                        <h3 className="font-bold text-[0.9375rem] text-text-primary group-hover/author:text-brand-light transition-colors">{author}</h3>
                         <p className="text-text-muted text-xs">{timeAgo}</p>
                     </div>
+                </Link>
 
                     {/* Options Menu */}
                     <div className="relative" ref={menuRef}>
@@ -276,104 +275,134 @@ export default function PostCard({
                     </div>
                 )}
 
-                {/* Content */}
-                <h2 className="text-lg font-bold mb-1.5 leading-snug">{title}</h2>
+            {/* Content */}
+            <Link href={`/posts/${id}`} className="block group/content">
+                <h2 className="text-lg font-bold mb-1.5 leading-snug group-hover/content:text-brand-light transition-colors">{title}</h2>
                 <p className="text-text-secondary text-[0.9375rem] mb-4 line-clamp-2 leading-relaxed">{description}</p>
+            </Link>
 
-                {/* Post Media Gallery */}
-                <PostMediaGallery
-                    images={images && images.length > 0 ? images : (image ? [image] : [])}
-                    altTitle={title}
-                />
+            {/* Post Media Gallery (Instagram-style Swipeable Carousel) */}
+            <PostMediaGallery
+                images={images && images.length > 0 ? images : (image ? [image] : [])}
+                altTitle={title}
+                postId={id}
+                onDoubleTapLike={() => {
+                    if (!isLiked) {
+                        setIsLiked(true);
+                        setLikes((prev) => prev + 1);
+                        api.ensureLiked(id).then((res) => {
+                            setIsLiked(res.liked);
+                            if (typeof res.likes_count === 'number') {
+                                setLikes(res.likes_count);
+                            }
+                        }).catch(() => {});
+                    }
+                }}
+            />
 
-                {/* Tags */}
-                {normalizedTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                        {normalizedTags.slice(0, 5).map((tag, i) => (
-                            <span key={i} className="pill text-xs">#{tag}</span>
-                        ))}
-                        {normalizedTags.length > 5 && (
-                            <span className="text-text-secondary text-sm">+{normalizedTags.length - 5} more</span>
-                        )}
-                    </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-5 pt-3 border-t border-border-default">
-                    <button
-                        onClick={handleLike}
-                        className={`flex items-center gap-1.5 text-sm transition-colors ${isLiked ? 'text-red-500' : 'text-text-muted hover:text-red-500'
-                            }`}
-                    >
-                        <Heart className={`w-[18px] h-[18px] ${isLiked ? 'fill-current' : ''}`} />
-                        <span>{likes}</span>
-                    </button>
-                    <div className="flex items-center gap-1.5 text-sm text-text-muted">
-                        <MessageCircle className="w-[18px] h-[18px]" />
-                        <span>{comments}</span>
-                    </div>
-                    <button
-                        onClick={handleShare}
-                        className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary transition-colors"
-                    >
-                        <Share2 className="w-[18px] h-[18px]" />
-                        <span>Share</span>
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className={`flex items-center gap-1.5 text-sm transition-colors ${isSaved ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}`}
-                    >
-                        <Bookmark className={`w-[18px] h-[18px] ${isSaved ? 'fill-current' : ''}`} />
-                    </button>
-                    <button
-                        onClick={handleBuildWith}
-                        className="flex items-center gap-1.5 text-xs text-brand-light bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/30 px-3 py-1.5 rounded-lg transition-all ml-auto font-semibold shadow-[0_0_12px_rgba(24,100,255,0.12)] hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                        <Users className="w-3.5 h-3.5 text-brand-light" />
-                        <span>Build With</span>
-                    </button>
+            {/* Tags */}
+            {normalizedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                    {normalizedTags.slice(0, 5).map((tag, i) => (
+                        <span key={i} className="pill text-xs">#{tag}</span>
+                    ))}
+                    {normalizedTags.length > 5 && (
+                        <span className="text-text-secondary text-sm">+{normalizedTags.length - 5} more</span>
+                    )}
                 </div>
+            )}
 
-                {/* Report Confirmation Modal */}
-                {showReportConfirm && (
+            {/* Actions */}
+            <div className="flex items-center gap-5 pt-3 border-t border-border-default">
+                <button
+                    onClick={handleLike}
+                    className={`flex items-center gap-1.5 text-sm transition-colors ${isLiked ? 'text-red-500' : 'text-text-muted hover:text-red-500'
+                        }`}
+                >
+                    <Heart className={`w-[18px] h-[18px] ${isLiked ? 'fill-current' : ''}`} />
+                    <span>{likes}</span>
+                </button>
+                <Link
+                    href={`/posts/${id}#comments`}
+                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary transition-colors"
+                >
+                    <MessageCircle className="w-[18px] h-[18px]" />
+                    <span>{comments}</span>
+                </Link>
+                <button
+                    onClick={handleShare}
+                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary transition-colors"
+                >
+                    <Share2 className="w-[18px] h-[18px]" />
+                    <span>Share</span>
+                </button>
+                <button
+                    onClick={handleSave}
+                    className={`flex items-center gap-1.5 text-sm transition-colors ${isSaved ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}`}
+                >
+                    <Bookmark className={`w-[18px] h-[18px] ${isSaved ? 'fill-current' : ''}`} />
+                </button>
+                <button
+                    onClick={handleBuildWith}
+                    className="flex items-center gap-1.5 text-xs text-brand-light bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/30 px-3 py-1.5 rounded-lg transition-all ml-auto font-semibold shadow-[0_0_12px_rgba(24,100,255,0.12)] hover:scale-[1.02] active:scale-[0.98]"
+                >
+                    <Users className="w-3.5 h-3.5 text-brand-light" />
+                    <span>Build With</span>
+                </button>
+            </div>
+
+            {/* Report Confirmation Modal */}
+            {showReportConfirm && (
+                <div
+                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={handleReportCancel}
+                >
                     <div
-                        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                        onClick={handleReportCancel}
+                        className="bg-bg-card border border-border-light rounded-2xl p-6 w-full max-w-md animate-scale-in shadow-2xl shadow-black/50"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <div
-                            className="bg-bg-card border border-border-light rounded-2xl p-6 w-full max-w-md animate-scale-in shadow-2xl shadow-black/50"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <h3 className="text-lg font-bold mb-4">Report Post</h3>
-                            <p className="text-text-secondary text-sm mb-4">
-                                Why are you reporting this post?
-                            </p>
-                            <textarea
-                                value={reportReason}
-                                onChange={(e) => setReportReason(e.target.value)}
-                                className="input w-full resize-none mb-4"
-                                rows={3}
-                                placeholder="Describe the issue..."
-                            />
-                            <div className="flex gap-3 justify-end">
-                                <button
-                                    onClick={handleReportCancel}
-                                    className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleReportSubmit}
-                                    disabled={reporting}
-                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
-                                >
-                                    {reporting ? 'Reporting...' : 'Report'}
-                                </button>
-                            </div>
+                        <h3 className="text-lg font-bold mb-4">Report Post</h3>
+                        <p className="text-text-secondary text-sm mb-4">
+                            Why are you reporting this post?
+                        </p>
+                        <textarea
+                            value={reportReason}
+                            onChange={(e) => setReportReason(e.target.value)}
+                            className="input w-full resize-none mb-4"
+                            rows={3}
+                            placeholder="Describe the issue..."
+                        />
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={handleReportCancel}
+                                className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleReportSubmit}
+                                disabled={reporting}
+                                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                            >
+                                {reporting ? 'Reporting...' : 'Report'}
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
-        </Link>
+                </div>
+            )}
+
+            {/* Build With Questionnaire Modal */}
+            <BuildWithModal
+                isOpen={isBuildWithOpen}
+                onClose={() => setIsBuildWithOpen(false)}
+                postId={id}
+                postTitle={title}
+                postRequirements={requirements}
+                onRequestSent={() => {
+                    toast.success('Build With proposal submitted!');
+                    if (onRefresh) onRefresh();
+                }}
+            />
+        </div>
     );
 }

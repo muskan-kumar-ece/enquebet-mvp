@@ -20,6 +20,21 @@ class CollaborationRequest(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_requests')
     receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_requests')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    role = models.CharField(max_length=100, blank=True, default='')
+    pitch = models.TextField(blank=True, default='')
+    weekly_commitment = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        choices=[
+            ('under_5_hours', '< 5 hours/week'),
+            ('5_10_hours', '5-10 hours/week'),
+            ('10_20_hours', '10-20 hours/week'),
+            ('full_time', '20+ hours / Full-time'),
+        ]
+    )
+    portfolio_url = models.URLField(max_length=500, blank=True, default='')
+    client_request_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -27,6 +42,10 @@ class CollaborationRequest(models.Model):
     class Meta:
         db_table = 'collaboration_requests'
         unique_together = ['post', 'sender']
+        indexes = [
+            models.Index(fields=['post', 'sender']),
+            models.Index(fields=['sender', 'client_request_id']),
+        ]
         ordering = ['-created_at']
     
     def __str__(self):
