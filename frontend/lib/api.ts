@@ -644,10 +644,34 @@ class ApiClient {
         return Array.isArray(data) ? data : (data.results ?? []);
     }
 
-    // Notifications
-    async getNotifications() {
-        const data = await this.request<any>('/notifications/');
-        return Array.isArray(data) ? data : (data.results ?? []);
+    // Notifications (10/10 Hardened Architecture)
+    async getUnreadNotificationCount() {
+        return this.request<{ unread_count: number; action_count: number }>('/notifications/unread-count/');
+    }
+
+    async getNotifications(params?: { limit?: number; cursor?: string; priority?: string }) {
+        const searchParams = new URLSearchParams();
+        if (params?.limit) searchParams.set('limit', String(params.limit));
+        if (params?.cursor) searchParams.set('cursor', params.cursor);
+        if (params?.priority && params.priority !== 'all') searchParams.set('priority', params.priority);
+        const qs = searchParams.toString();
+        const data = await this.request<any>(`/notifications/${qs ? `?${qs}` : ''}`);
+        if (Array.isArray(data)) {
+            return {
+                results: data,
+                next_cursor: null as string | null,
+                has_more: false,
+                unread_count: data.filter((n: any) => !n.is_read).length,
+                action_count: data.filter((n: any) => !n.is_read && n.priority === 'action').length,
+            };
+        }
+        return {
+            results: (data.results ?? []) as any[],
+            next_cursor: (data.next_cursor ?? null) as string | null,
+            has_more: Boolean(data.has_more),
+            unread_count: Number(data.unread_count ?? 0),
+            action_count: Number(data.action_count ?? 0),
+        };
     }
 
     async markAsRead(notificationId: string) {
@@ -659,6 +683,26 @@ class ApiClient {
     async markAllRead() {
         return this.request<{ message: string; updated: number }>('/notifications/read-all/', {
             method: 'PUT',
+        });
+    }
+
+    async markNotificationsSeen(notificationIds: string[]) {
+        return this.request<{ message: string; seen_count: number }>('/notifications/seen/', {
+            method: 'POST',
+            body: JSON.stringify({ notification_ids: notificationIds }),
+        });
+    }
+
+    async muteNotificationTarget(targetType: string, targetId: string) {
+        return this.request('/notifications/mute/', {
+            method: 'POST',
+            body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+        });
+    }
+
+    async unmuteNotificationTarget(targetType: string, targetId: string) {
+        return this.request(`/notifications/mute/?target_type=${encodeURIComponent(targetType)}&target_id=${encodeURIComponent(targetId)}`, {
+            method: 'DELETE',
         });
     }
 

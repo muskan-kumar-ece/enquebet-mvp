@@ -148,12 +148,16 @@ class ResourceViewSet(viewsets.ModelViewSet):
 
         # Notify uploader
         try:
-            Notification.objects.create(
-                user=resource.uploader,
-                sender=request.user,
-                type='system',
-                reference_id=resource.id,
-                message=f"Your resource '{resource.title}' has been approved and is now live in the library!"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=resource.uploader,
+                actor=request.user,
+                event_type='system',
+                target_type='resource',
+                target_id=str(resource.id),
+                priority='personal',
+                message_template=f"Your resource '{resource.title}' has been approved and is now live in the library!",
+                data={'resource_id': str(resource.id), 'resource_slug': resource.slug},
             )
         except Exception:
             pass
@@ -178,12 +182,16 @@ class ResourceViewSet(viewsets.ModelViewSet):
         # Notify uploader
         try:
             feedback_msg = f" Reason: {reason}" if reason else ""
-            Notification.objects.create(
-                user=resource.uploader,
-                sender=request.user,
-                type='system',
-                reference_id=resource.id,
-                message=f"Your resource submission '{resource.title}' was reviewed and not approved.{feedback_msg}"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=resource.uploader,
+                actor=request.user,
+                event_type='system',
+                target_type='resource',
+                target_id=str(resource.id),
+                priority='personal',
+                message_template=f"Your resource submission '{resource.title}' was reviewed and not approved.{feedback_msg}",
+                data={'resource_id': str(resource.id), 'reason': reason},
             )
         except Exception:
             pass

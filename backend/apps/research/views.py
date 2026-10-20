@@ -265,13 +265,16 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
 
         # Notify primary author
         try:
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                user=paper.primary_author,
-                sender=request.user,
-                type='system',
-                reference_id=paper.id,
-                message=f"Your research paper '{paper.title}' [{paper.paper_code}] has been approved and is now live in the Living Research Hub!"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=paper.primary_author,
+                actor=request.user,
+                event_type='system',
+                target_type='research',
+                target_id=str(paper.id),
+                priority='personal',
+                message_template=f"Your research paper '{paper.title}' [{paper.paper_code}] has been approved and is now live in the Living Research Hub!",
+                data={'paper_id': str(paper.id), 'paper_code': paper.paper_code, 'slug': paper.slug},
             )
         except Exception:
             pass
@@ -297,14 +300,17 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
 
         # Notify primary author
         try:
-            from apps.notifications.models import Notification
             feedback = f" Reason: {reason}" if reason else ""
-            Notification.objects.create(
-                user=paper.primary_author,
-                sender=request.user,
-                type='system',
-                reference_id=paper.id,
-                message=f"Your research paper submission '{paper.title}' was reviewed and not approved.{feedback}"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=paper.primary_author,
+                actor=request.user,
+                event_type='system',
+                target_type='research',
+                target_id=str(paper.id),
+                priority='personal',
+                message_template=f"Your research paper submission '{paper.title}' was reviewed and not approved.{feedback}",
+                data={'paper_id': str(paper.id), 'reason': reason},
             )
         except Exception:
             pass
@@ -338,13 +344,16 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
         paper.save(update_fields=['status', 'author_feedback', 'internal_editorial_notes', 'screening_checklist', 'reviewed_by', 'reviewed_at'])
 
         try:
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                user=paper.primary_author,
-                sender=request.user,
-                type='system',
-                reference_id=paper.id,
-                message=f"Revisions requested on research paper '{paper.title}' [{paper.paper_code}]. Review feedback: {feedback[:140]}"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=paper.primary_author,
+                actor=request.user,
+                event_type='system',
+                target_type='research',
+                target_id=str(paper.id),
+                priority='personal',
+                message_template=f"Revisions requested on research paper '{paper.title}' [{paper.paper_code}]. Review feedback: {feedback[:140]}",
+                data={'paper_id': str(paper.id), 'feedback': feedback},
             )
         except Exception:
             pass
@@ -406,13 +415,16 @@ class ResearchPaperViewSet(viewsets.ModelViewSet):
         paper.save(update_fields=['status', 'reviewed_by', 'reviewed_at'])
 
         try:
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                user=paper.primary_author,
-                sender=request.user,
-                type='system',
-                reference_id=paper.id,
-                message=f"Congratulations! Your research paper '{paper.title}' has been officially published as an {paper.get_status_display()}."
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=paper.primary_author,
+                actor=request.user,
+                event_type='system',
+                target_type='research',
+                target_id=str(paper.id),
+                priority='personal',
+                message_template=f"Congratulations! Your research paper '{paper.title}' has been officially published as an {paper.get_status_display()}.",
+                data={'paper_id': str(paper.id), 'paper_code': paper.paper_code, 'slug': paper.slug},
             )
         except Exception:
             pass

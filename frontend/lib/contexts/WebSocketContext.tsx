@@ -10,6 +10,7 @@ import {
     useCallback,
 } from 'react';
 import { WebSocketManager, resolveSecureWsUrl } from '@/lib/websocket';
+import { api } from '@/lib/api';
 
 interface WebSocketContextType {
     /** Subscribe to notification events. Returns unsubscribe fn. */
@@ -30,8 +31,10 @@ interface WebSocketContextType {
     sendChatRead: () => void;
     /** Total unread notification count (for badge) */
     unreadCount: number;
-    /** Call when notifications are viewed to reset badge */
-    clearUnread: () => void;
+    /** High-priority action-required notification count */
+    actionCount: number;
+    /** Mark all notifications as read in database and broadcast across all tabs */
+    clearUnread: () => Promise<void>;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -49,11 +52,27 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     const chatWS = useRef<WebSocketManager | null>(null);
     const currentConvoId = useRef<string | null>(null);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [actionCount, setActionCount] = useState(0);
+
+    // Initial fetch of unread count on mount
+    useEffect(() => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+        if (!token) return;
+
+        api.getUnreadNotificationCount()
+            .then((res) => {
+                if (res) {
+                    setUnreadCount(Number(res.unread_count ?? 0));
+                    setActionCount(Number(res.action_count ?? 0));
+                }
+            })
+            .catch(() => { });
+    }, []);
 
     // Connect notification WS on mount (if token is available)
     useEffect(() => {
         if (isWebSocketDisabled()) return;
-        const token = localStorage.getItem('accessToken');
+        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
         if (!token) return;
 
         const wsUrlBuilder = () => resolveSecureWsUrl('ws/notifications/');
@@ -61,13 +80,49 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         notifWS.current = ws;
         ws.connect();
 
-        // Increment badge on each new notification
-        const unsub = ws.on('notification', () => {
-            setUnreadCount((c) => c + 1);
+        // Increment badge or refresh count on new notification
+        const unsubNew = ws.on('notification', () => {
+            api.getUnreadNotificationCount()
+                .then((res) => {
+                    if (res) {
+                        setUnreadCount(Number(res.unread_count ?? 0));
+                        setActionCount(Number(res.action_count ?? 0));
+                    }
+                })
+                .catch(() => setUnreadCount((c) => c + 1));
+        });
+
+        // Listen for server canonical count broadcasts
+        const unsubCount = ws.on('unread_count_updated', (data: any) => {
+            if (data) {
+                setUnreadCount(Number(data.unread_count ?? 0));
+                if (data.action_count !== undefined) {
+                    setActionCount(Number(data.action_count ?? 0));
+                }
+            }
+        });
+
+        // Cross-tab mark-all-read synchronization
+        const unsubAllRead = ws.on('all_read', () => {
+            setUnreadCount(0);
+            setActionCount(0);
+        });
+
+        // Read or removed events
+        const unsubRead = ws.on('notification_read', () => {
+            setUnreadCount((c) => Math.max(0, c - 1));
+        });
+
+        const unsubRemoved = ws.on('notification_removed', () => {
+            setUnreadCount((c) => Math.max(0, c - 1));
         });
 
         return () => {
-            unsub();
+            unsubNew();
+            unsubCount();
+            unsubAllRead();
+            unsubRead();
+            unsubRemoved();
             ws.disconnect();
             notifWS.current = null;
         };
@@ -75,15 +130,18 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     const onNotification = useCallback((handler: (data: any) => void) => {
         if (!notifWS.current) return () => { };
-        return notifWS.current.on('notification', handler);
+        const unsubNew = notifWS.current.on('notification', handler);
+        const unsubUpd = notifWS.current.on('notification_updated', handler);
+        return () => {
+            unsubNew();
+            unsubUpd();
+        };
     }, []);
 
     const connectChat = useCallback((conversationId: string) => {
         if (isWebSocketDisabled()) return;
-        // Don't reconnect if same conversation
         if (currentConvoId.current === conversationId && chatWS.current?.isConnected) return;
 
-        // Disconnect previous chat WS
         chatWS.current?.disconnect();
         currentConvoId.current = conversationId;
 
@@ -120,7 +178,15 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         chatWS.current?.send({ type: 'read' });
     }, []);
 
-    const clearUnread = useCallback(() => setUnreadCount(0), []);
+    const clearUnread = useCallback(async () => {
+        setUnreadCount(0);
+        setActionCount(0);
+        try {
+            await api.markAllRead();
+        } catch (err) {
+            console.error('Failed to mark all notifications read:', err);
+        }
+    }, []);
 
     return (
         <WebSocketContext.Provider
@@ -134,6 +200,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                 sendChatTyping,
                 sendChatRead,
                 unreadCount,
+                actionCount,
                 clearUnread,
             }}
         >

@@ -14,9 +14,12 @@ export default function RightPanel() {
     useEffect(() => {
         if (!authLoading && user) {
             let cancelled = false;
-            api.getNotifications()
+            api.getNotifications({ limit: 5 })
                 .then((data) => {
-                    if (!cancelled) setNotifications(Array.isArray(data) ? data.slice(0, 5) : []);
+                    if (!cancelled) {
+                        const items = Array.isArray(data) ? data : (data?.results ?? []);
+                        setNotifications(items.slice(0, 5));
+                    }
                 })
                 .catch(() => {
                     if (!cancelled) setNotifications([]);
@@ -180,11 +183,12 @@ export default function RightPanel() {
                             </div>
                         ) : (
                             notifications.map((notif) => (
-                                <div
+                                <Link
                                     key={notif.id}
-                                    className={`bg-bg-card/50 rounded-lg p-3 transition-colors hover:bg-bg-hover ${!notif.is_read ? 'border-l-2 border-brand-primary' : ''}`}
+                                    href={notif.action_url || '/notifications'}
+                                    className={`block bg-bg-card/50 rounded-lg p-3 transition-colors hover:bg-bg-hover ${!notif.is_read ? 'border-l-2 border-brand-primary' : ''}`}
                                 >
-                                    <p className="text-[0.8125rem] line-clamp-2 leading-snug">
+                                    <p className="text-[0.8125rem] line-clamp-2 leading-snug text-text-primary">
                                         {notif.message || notif.content || 'New notification'}
                                     </p>
                                     <p className="text-text-muted text-[10px] mt-1">
@@ -192,7 +196,7 @@ export default function RightPanel() {
                                             ? new Date(notif.created_at).toLocaleDateString()
                                             : ''}
                                     </p>
-                                </div>
+                                </Link>
                             ))
                         )}
                     </div>

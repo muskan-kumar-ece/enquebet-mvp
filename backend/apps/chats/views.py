@@ -250,14 +250,24 @@ class ConversationMessagesView(generics.ListCreateAPIView):
             .exclude(user=self.request.user)
             .values_list('user_id', flat=True)
         )
+        from apps.notifications.services import NotificationService
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        snippet = (message.content or '')[:40]
         for uid in other_user_ids:
-            Notification.objects.create(
-                user_id=uid,
-                sender=self.request.user,
-                type='message',
-                reference_id=conversation.id,
-                message=f'New message from {self.request.user.username}',
-            )
+            recipient = UserModel.objects.filter(id=uid).first()
+            if recipient:
+                NotificationService.send_event(
+                    recipient=recipient,
+                    actor=self.request.user,
+                    event_type='message',
+                    target_type='conversation',
+                    target_id=str(conversation.id),
+                    priority='personal',
+                    message_template=f'New message from {self.request.user.username}',
+                    data={'conversation_id': str(conversation.id), 'snippet': snippet},
+                    group_key=f"conversation:{conversation.id}:message",
+                )
 
         payload = MessageSerializer(message, context={'request': self.request}).data
         _broadcast_chat_message(str(conversation.id), payload)
@@ -325,14 +335,24 @@ class SendMessageAliasView(APIView):
             .exclude(user=request.user)
             .values_list('user_id', flat=True)
         )
+        from apps.notifications.services import NotificationService
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        snippet = (message.content or '')[:40]
         for uid in other_user_ids:
-            Notification.objects.create(
-                user_id=uid,
-                sender=request.user,
-                type='message',
-                reference_id=conversation.id,
-                message=f'New message from {request.user.username}',
-            )
+            recipient = UserModel.objects.filter(id=uid).first()
+            if recipient:
+                NotificationService.send_event(
+                    recipient=recipient,
+                    actor=request.user,
+                    event_type='message',
+                    target_type='conversation',
+                    target_id=str(conversation.id),
+                    priority='personal',
+                    message_template=f'New message from {request.user.username}',
+                    data={'conversation_id': str(conversation.id), 'snippet': snippet},
+                    group_key=f"conversation:{conversation.id}:message",
+                )
 
         data = MessageSerializer(message, context={'request': request}).data
         _broadcast_chat_message(str(conversation.id), data)

@@ -335,12 +335,16 @@ class TeamMemberRemoveView(WorkspaceLookupMixin, APIView):
         orphaned_tasks.update(status='backlog', assignee=None, updated_at=timezone.now())
 
         # 5. Notify removed user
-        Notification.objects.create(
-            user=target_membership.user,
-            sender=request.user,
-            type='team_removed',
-            reference_id=workspace.id,
-            message=f"You were removed from '{workspace.post.title}' by {request.user.username}. Reason: {reason}"
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=target_membership.user,
+            actor=request.user,
+            event_type='team_removed',
+            target_type='workspace',
+            target_id=str(workspace.id),
+            priority='personal',
+            message_template=f"You were removed from '{workspace.post.title}' by {request.user.username}. Reason: {reason}",
+            data={'workspace_id': str(workspace.id)},
         )
 
         # 6. Audit log
@@ -465,13 +469,20 @@ class ProjectTaskListCreateView(WorkspaceLookupMixin, APIView):
         )
 
         if assignee_id and assignee_id != request.user.id:
-            Notification.objects.create(
-                user_id=assignee_id,
-                sender=request.user,
-                type='task_assigned',
-                reference_id=task.id,
-                message=f"You were assigned to task '{task.title}' in {workspace.post.title}"
-            )
+            from django.contrib.auth import get_user_model
+            assignee_user = get_user_model().objects.filter(id=assignee_id).first()
+            if assignee_user:
+                from apps.notifications.services import NotificationService
+                NotificationService.send_event(
+                    recipient=assignee_user,
+                    actor=request.user,
+                    event_type='task_assigned',
+                    target_type='task',
+                    target_id=str(task.id),
+                    priority='personal',
+                    message_template=f"You were assigned to task '{task.title}' in {workspace.post.title}",
+                    data={'workspace_id': str(workspace.id), 'task_id': str(task.id)},
+                )
 
         workspace.recalculate_progress()
         serialized_task = ProjectTaskSerializer(task, context={'request': request}).data
@@ -617,12 +628,16 @@ class TaskDeliverableSubmitView(WorkspaceLookupMixin, APIView):
         # Notify reviewer or owner/lead
         target_reviewer = task.reviewer or (workspace.post.user if workspace.post.user != request.user else None)
         if target_reviewer:
-            Notification.objects.create(
-                user=target_reviewer,
-                sender=request.user,
-                type='deliverable_review',
-                reference_id=task.id,
-                message=f"Review requested for '{task.title}' by {request.user.username}"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=target_reviewer,
+                actor=request.user,
+                event_type='deliverable_review',
+                target_type='deliverable',
+                target_id=str(task.id),
+                priority='action',
+                message_template=f"Review requested for '{task.title}' by {request.user.username}",
+                data={'workspace_id': str(workspace.id), 'task_id': str(task.id), 'deliverable_id': str(deliverable.id)},
             )
 
         workspace.recalculate_progress()
@@ -701,12 +716,17 @@ class TaskDeliverableReviewView(WorkspaceLookupMixin, APIView):
             metadata={'task_id': str(task.id), 'verdict': verdict}
         )
 
-        Notification.objects.create(
-            user=deliverable.submitted_by,
-            sender=request.user,
-            type='deliverable_review',
-            reference_id=task.id,
-            message=f"Your deliverable for '{task.title}' was {verdict.replace('_', ' ')} by {request.user.username}"
+        from apps.notifications.services import NotificationService
+        notif_type = 'deliverable_approved' if verdict == 'approved' else 'deliverable_changes_requested'
+        NotificationService.send_event(
+            recipient=deliverable.submitted_by,
+            actor=request.user,
+            event_type=notif_type,
+            target_type='deliverable',
+            target_id=str(task.id),
+            priority='action',
+            message_template=f"Your deliverable for '{task.title}' was {verdict.replace('_', ' ')} by {request.user.username}",
+            data={'workspace_id': str(workspace.id), 'task_id': str(task.id), 'verdict': verdict},
         )
 
         workspace.recalculate_progress()
@@ -807,14 +827,18 @@ class ProjectCompletionRequestView(WorkspaceLookupMixin, APIView):
         )
 
         # Notify team
+        from apps.notifications.services import NotificationService
         for member in workspace.memberships.filter(status='active').select_related('user'):
             if member.user != request.user:
-                Notification.objects.create(
-                    user=member.user,
-                    sender=request.user,
-                    type='project_completed',
-                    reference_id=workspace.id,
-                    message=f"Project '{workspace.post.title}' has been successfully completed! Proof of Work minted: {proof.verification_code}"
+                NotificationService.send_event(
+                    recipient=member.user,
+                    actor=request.user,
+                    event_type='project_completed',
+                    target_type='workspace',
+                    target_id=str(workspace.id),
+                    priority='personal',
+                    message_template=f"Project '{workspace.post.title}' has been successfully completed! Proof of Work minted: {proof.verification_code}",
+                    data={'workspace_id': str(workspace.id), 'verification_code': proof.verification_code},
                 )
 
         # Award verified project completion reputation to lead and contributing builders

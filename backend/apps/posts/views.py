@@ -590,6 +590,7 @@ class LikePostView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, post_id):
+        from apps.notifications.services import NotificationService
         action = request.data.get('action', 'toggle') if isinstance(request.data, dict) else 'toggle'
         with transaction.atomic():
             try:
@@ -602,35 +603,45 @@ class LikePostView(APIView):
             if action == 'unlike':
                 if existing_like:
                     existing_like.delete()
+                    NotificationService.remove_event(
+                        recipient=post.user,
+                        actor=request.user,
+                        group_key=f"post:{post.id}:like"
+                    )
                 liked = False
             elif action == 'like':
                 if not existing_like:
                     Like.objects.create(post=post, user=request.user)
-                    if post.user != request.user:
-                        from apps.notifications.models import Notification
-                        Notification.objects.create(
-                            user=post.user,
-                            sender=request.user,
-                            type='like',
-                            reference_id=post.id,
-                            message=f"{request.user.username} liked your post"
-                        )
+                    NotificationService.send_event(
+                        recipient=post.user,
+                        actor=request.user,
+                        event_type='like',
+                        target_type='post',
+                        target_id=str(post.id),
+                        priority='social',
+                        data={'post_title': post.title or ''},
+                    )
                 liked = True
             else:  # toggle
                 if existing_like:
                     existing_like.delete()
+                    NotificationService.remove_event(
+                        recipient=post.user,
+                        actor=request.user,
+                        group_key=f"post:{post.id}:like"
+                    )
                     liked = False
                 else:
                     Like.objects.create(post=post, user=request.user)
-                    if post.user != request.user:
-                        from apps.notifications.models import Notification
-                        Notification.objects.create(
-                            user=post.user,
-                            sender=request.user,
-                            type='like',
-                            reference_id=post.id,
-                            message=f"{request.user.username} liked your post"
-                        )
+                    NotificationService.send_event(
+                        recipient=post.user,
+                        actor=request.user,
+                        event_type='like',
+                        target_type='post',
+                        target_id=str(post.id),
+                        priority='social',
+                        data={'post_title': post.title or ''},
+                    )
                     liked = True
 
             likes_count = post.likes.count()
@@ -639,6 +650,7 @@ class LikePostView(APIView):
 
     def put(self, request, post_id):
         """Ensure post is liked (explicit PUT, idempotent)."""
+        from apps.notifications.services import NotificationService
         with transaction.atomic():
             try:
                 post = Post.objects.select_for_update().get(id=post_id)
@@ -647,26 +659,32 @@ class LikePostView(APIView):
             
             if not Like.objects.filter(post=post, user=request.user).exists():
                 Like.objects.create(post=post, user=request.user)
-                if post.user != request.user:
-                    from apps.notifications.models import Notification
-                    Notification.objects.create(
-                        user=post.user,
-                        sender=request.user,
-                        type='like',
-                        reference_id=post.id,
-                        message=f"{request.user.username} liked your post"
-                    )
+                NotificationService.send_event(
+                    recipient=post.user,
+                    actor=request.user,
+                    event_type='like',
+                    target_type='post',
+                    target_id=str(post.id),
+                    priority='social',
+                    data={'post_title': post.title or ''},
+                )
             likes_count = post.likes.count()
         return Response({'liked': True, 'likes_count': likes_count})
 
     def delete(self, request, post_id):
         """Unlike a post (explicit DELETE, per spec)."""
+        from apps.notifications.services import NotificationService
         with transaction.atomic():
             try:
                 post = Post.objects.select_for_update().get(id=post_id)
             except Post.DoesNotExist:
                 return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
             Like.objects.filter(post=post, user=request.user).delete()
+            NotificationService.remove_event(
+                recipient=post.user,
+                actor=request.user,
+                group_key=f"post:{post.id}:like"
+            )
             likes_count = post.likes.count()
         return Response({'liked': False, 'likes_count': likes_count})
 
@@ -676,12 +694,18 @@ class UnlikePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, post_id):
+        from apps.notifications.services import NotificationService
         with transaction.atomic():
             try:
                 post = Post.objects.select_for_update().get(id=post_id)
             except Post.DoesNotExist:
                 return Response({'error': 'Post not found'}, status=status.HTTP_404_NOT_FOUND)
             Like.objects.filter(post=post, user=request.user).delete()
+            NotificationService.remove_event(
+                recipient=post.user,
+                actor=request.user,
+                group_key=f"post:{post.id}:like"
+            )
             likes_count = post.likes.count()
         return Response({'liked': False, 'likes_count': likes_count})
 
@@ -730,12 +754,16 @@ class PostJoinView(APIView):
                 message=message,
             )
 
-        Notification.objects.create(
-            user=post.user,
-            sender=request.user,
-            type='collaboration_request',
-            reference_id=collab_request.id,
-            message=f"{request.user.username} wants to collaborate on '{post.title}'",
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=post.user,
+            actor=request.user,
+            event_type='collaboration_request',
+            target_type='collaboration_request',
+            target_id=str(collab_request.id),
+            priority='action',
+            message_template=f"{request.user.username} wants to collaborate on '{post.title}'",
+            data={'post_id': str(post.id), 'post_title': post.title or '', 'role': getattr(collab_request, 'role', '') or ''},
         )
 
         return Response({'requested': True, 'request_id': str(collab_request.id)}, status=status.HTTP_201_CREATED)
@@ -815,13 +843,15 @@ class CommentListCreateView(generics.ListCreateAPIView):
             comments_count = post.comments.count()
 
         if post.user != request.user:
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                user=post.user,
-                sender=request.user,
-                type='comment',
-                reference_id=post.id,
-                message=f"{request.user.username} commented on your post"
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=post.user,
+                actor=request.user,
+                event_type='comment',
+                target_type='post',
+                target_id=str(post.id),
+                priority='social',
+                data={'post_title': post.title or '', 'post_id': str(post.id), 'comment_id': str(comment.id)},
             )
 
         data = self.get_serializer(comment).data

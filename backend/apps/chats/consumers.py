@@ -218,14 +218,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 .exclude(user=self.user)
                 .values_list('user_id', flat=True)
             )
+            from apps.notifications.services import NotificationService
+            from django.contrib.auth import get_user_model
+            UserModel = get_user_model()
+            snippet = (message.content or '')[:40]
             for uid in other_user_ids:
-                Notification.objects.create(
-                    user_id=uid,
-                    sender=self.user,
-                    type='message',
-                    reference_id=conversation.id,
-                    message=f'New message from {self.user.username}',
-                )
+                recipient = UserModel.objects.filter(id=uid).first()
+                if recipient:
+                    NotificationService.send_event(
+                        recipient=recipient,
+                        actor=self.user,
+                        event_type='message',
+                        target_type='conversation',
+                        target_id=str(conversation.id),
+                        priority='personal',
+                        message_template=f'New message from {self.user.username}',
+                        data={'conversation_id': str(conversation.id), 'snippet': snippet},
+                        group_key=f"conversation:{conversation.id}:message",
+                    )
 
             return {
                 'id': str(message.id),

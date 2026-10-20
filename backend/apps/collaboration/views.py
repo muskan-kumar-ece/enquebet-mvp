@@ -126,12 +126,16 @@ class SendCollaborationRequestView(APIView):
             )
 
         # Create notification for post owner
-        Notification.objects.create(
-            user=post.user,
-            sender=request.user,
-            type='collaboration_request',
-            reference_id=collab_request.id,
-            message=f"{request.user.username} wants to collaborate on '{post.title}'"
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=post.user,
+            actor=request.user,
+            event_type='collaboration_request',
+            target_type='collaboration_request',
+            target_id=str(collab_request.id),
+            priority='action',
+            message_template=f"{request.user.username} wants to collaborate on '{post.title}'",
+            data={'post_id': str(post.id), 'post_title': post.title or '', 'role': role or ''},
         )
         
         return Response(
@@ -230,12 +234,16 @@ class AcceptCollaborationRequestView(APIView):
         conversation = self.create_or_get_group_chat(post, collab_request.sender)
         
         # 9. Create notification for requester
-        Notification.objects.create(
-            user=collab_request.sender,
-            sender=request.user,
-            type='collaboration_accepted',
-            reference_id=collab_request.id,
-            message=f"{request.user.username} accepted your collaboration request on '{post.title}'!"
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=collab_request.sender,
+            actor=request.user,
+            event_type='collaboration_accepted',
+            target_type='workspace',
+            target_id=str(workspace.id),
+            priority='action',
+            message_template=f"{request.user.username} accepted your collaboration request on '{post.title}'!",
+            data={'workspace_id': str(workspace.id), 'post_id': str(post.id), 'post_title': post.title or ''},
         )
         
         return Response({
@@ -336,12 +344,16 @@ class DeclineCollaborationRequestView(APIView):
         collab_request.save(update_fields=['status', 'updated_at'])
 
         # Notify the sender about the decline
-        Notification.objects.create(
-            user=collab_request.sender,
-            sender=request.user,
-            type='collaboration_declined',
-            reference_id=collab_request.id,
-            message=f"{request.user.username} declined your collaboration request"
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=collab_request.sender,
+            actor=request.user,
+            event_type='collaboration_declined',
+            target_type='post',
+            target_id=str(collab_request.post_id),
+            priority='personal',
+            message_template=f"{request.user.username} declined your collaboration request on '{collab_request.post.title}'",
+            data={'post_id': str(collab_request.post_id)},
         )
         
         return Response({'message': 'Request declined'})

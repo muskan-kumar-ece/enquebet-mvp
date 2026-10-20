@@ -346,12 +346,15 @@ class FollowUserView(APIView):
         )
 
         if created:
-            Notification.objects.create(
-                user=target_user,
-                sender=request.user,
-                type='follow',
-                reference_id=request.user.id,
-                message=f"{request.user.username} started following you",
+            from apps.notifications.services import NotificationService
+            NotificationService.send_event(
+                recipient=target_user,
+                actor=request.user,
+                event_type='follow',
+                target_type='user',
+                target_id=str(request.user.id),
+                priority='personal',
+                message_template=f"{request.user.username} started following you",
             )
 
         return Response(_follow_payload(request.user, target_user, True))
@@ -541,12 +544,15 @@ class FollowToggleView(APIView):
             relationship.delete()
             return Response({'following': False})
 
-        Notification.objects.create(
-            user=target_user,
-            sender=request.user,
-            type='follow',
-            reference_id=request.user.id,
-            message=f"{request.user.username} started following you"
+        from apps.notifications.services import NotificationService
+        NotificationService.send_event(
+            recipient=target_user,
+            actor=request.user,
+            event_type='follow',
+            target_type='user',
+            target_id=str(request.user.id),
+            priority='personal',
+            message_template=f"{request.user.username} started following you",
         )
         return Response({'following': True})
 
