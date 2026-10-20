@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { 
-    X, Plus, Settings, UserMinus, AlertCircle, 
-    Calendar, Flag, User, AlertTriangle
+    X, Plus, Settings, UserMinus, Flag
 } from 'lucide-react';
 
 interface CreateTaskModalProps {

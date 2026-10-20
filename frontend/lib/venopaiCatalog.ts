@@ -1421,7 +1421,7 @@ export async function fetchVenopaiCatalog(): Promise<{
         };
       }
     }
-  } catch (err) {
+  } catch {
     // Graceful fallback to canonical catalog
   }
 

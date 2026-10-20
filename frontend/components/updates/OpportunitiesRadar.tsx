@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { GraduationCap, Trophy, Calendar, DollarSign, Globe, ExternalLink, ArrowRight, Sparkles, Users } from 'lucide-react';
+import { GraduationCap, Trophy, DollarSign, Globe, ExternalLink, ArrowRight, Users } from 'lucide-react';
 import Link from 'next/link';
 
 interface OpportunitiesRadarProps {

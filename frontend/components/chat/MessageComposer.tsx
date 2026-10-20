@@ -66,6 +66,11 @@ export function MessageComposer({
                 textareaRef.current.style.height = 'auto';
                 textareaRef.current.focus();
             }
+        } catch {
+            // Preserve draft in place so user does not lose written text or attachment
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+            }
         } finally {
             setSending(false);
         }

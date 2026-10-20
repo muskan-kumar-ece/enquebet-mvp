@@ -16,8 +16,7 @@ import {
     Cpu,
     ShieldAlert,
     Users,
-    Radio,
-    Clock
+    Radio
 } from 'lucide-react';
 
 interface UpdateDetailDrawerProps {

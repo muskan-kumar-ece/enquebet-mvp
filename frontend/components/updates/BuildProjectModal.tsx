@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { X, Wrench, Layers, ArrowRight, Check, AlertCircle, PlusCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { X, Wrench, Check, PlusCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import Link from 'next/link';

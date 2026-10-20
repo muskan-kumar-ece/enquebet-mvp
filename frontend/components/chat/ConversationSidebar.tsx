@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Users, User, Hash, MessageSquarePlus, RefreshCw } from 'lucide-react';
 
 interface ConversationSidebarProps {
@@ -24,13 +24,13 @@ export function ConversationSidebar({
     const [activeTab, setActiveTab] = useState<'all' | 'dms' | 'groups'>('all');
 
     // Helper to resolve conversation display name
-    const getConvoTitle = (convo: any) => {
+    const getConvoTitle = useCallback((convo: any) => {
         if (convo.project_title) return convo.project_title;
         if (convo.name) return convo.name;
         // For 1-on-1 DMs, show the other user's name
         const otherMember = convo.members?.find((m: any) => m.id !== currentUserId);
         return otherMember?.full_name || otherMember?.username || 'Direct Message';
-    };
+    }, [currentUserId]);
 
     // Helper to get initials or icon
     const getInitials = (title: string) => {
@@ -56,7 +56,7 @@ export function ConversationSidebar({
             const q = searchQuery.toLowerCase().trim();
             return title.includes(q) || lastMsg.includes(q);
         });
-    }, [conversations, activeTab, searchQuery, currentUserId]);
+    }, [conversations, activeTab, searchQuery, getConvoTitle]);
 
     const dmsCount = useMemo(() => conversations.filter((c) => !c.is_group).length, [conversations]);
     const groupsCount = useMemo(() => conversations.filter((c) => c.is_group).length, [conversations]);

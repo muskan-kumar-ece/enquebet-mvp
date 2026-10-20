@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, RefreshCw, ShoppingCart, FileText, Settings, Users, Menu, X, Kanban, Activity } from 'lucide-react';
+import { Home, Search, Plus, MessageSquare, Bell, User, Bot, GraduationCap, Download, ShoppingCart, FileText, Settings, Users, Menu, X, Kanban, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWebSocket } from '@/lib/contexts/WebSocketContext';
@@ -31,11 +31,13 @@ export default function Sidebar() {
     const pathname = usePathname();
     const { unreadCount } = useWebSocket();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [prevPathname, setPrevPathname] = useState(pathname);
 
     // Close mobile sidebar on route change
-    useEffect(() => {
+    if (pathname !== prevPathname) {
+        setPrevPathname(pathname);
         setMobileOpen(false);
-    }, [pathname]);
+    }
 
     // Prevent body scroll when mobile sidebar is open
     useEffect(() => {

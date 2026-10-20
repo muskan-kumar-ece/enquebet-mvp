@@ -2,12 +2,11 @@
 
 import React, { useState } from 'react';
 import { 
-    X, Clock, CheckCircle2, AlertCircle, AlertTriangle, 
+    X, AlertTriangle, 
     FileText, Send, GitPullRequest, ExternalLink, ShieldCheck,
-    User, Calendar, ChevronRight, Check, Sparkles
+    User, Calendar, Check
 } from 'lucide-react';
 import { PRIORITY_BADGES, TASK_STATUS_COLUMNS } from './KanbanBoard';
-import toast from 'react-hot-toast';
 
 interface TaskDetailDrawerProps {
     task: any | null;

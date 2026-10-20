@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { X, SlidersHorizontal, Check, Plus, Tag } from 'lucide-react';
+import { X, SlidersHorizontal } from 'lucide-react';
 import { PULSE_DOMAINS } from './PulseNavigationTabs';
 import toast from 'react-hot-toast';
 

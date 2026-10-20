@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { 
-    Award, ShieldCheck, CheckCircle2, Copy, 
-    Check, ExternalLink, Star, Users, Hash, 
-    Share2, Sparkles, Send
+    CheckCircle2, Copy, 
+    Check, ExternalLink, Star, Users, 
+    Share2, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BrandMarkSvg } from '@/components/ui/BrandLogo';

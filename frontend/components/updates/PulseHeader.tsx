@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Plus, Pin, Radio, Flame, BookOpen, Compass, Search, SlidersHorizontal, Activity } from 'lucide-react';
+import { Plus, Pin, Search, SlidersHorizontal, Activity } from 'lucide-react';
 
 interface PulseHeaderProps {
     isAdmin: boolean;
@@ -33,7 +33,7 @@ export function PulseHeader({
                 <div className="space-y-2">
                     {/* Telemetry pill row */}
                     <div className="flex items-center gap-2.5 flex-wrap text-[11px] font-mono">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#1864ff]/10 border border-[#1864ff]/25 text-[#4f8fff] font-medium tracking-wide">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#1864ff]/10 border border-[#1864ff]/25 text-[#4f8fff] font-semibold tracking-wide">
                             <Activity className="w-3 h-3 text-[#1864ff] animate-pulse" />
                             ENQUEbet PULSE
                         </span>
@@ -43,7 +43,7 @@ export function PulseHeader({
                         </span>
                         <span className="text-zinc-500 font-mono">·</span>
                         <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                            9 Domains Active
+                            {totalUpdates > 0 ? `${totalUpdates} Signals` : '9 Domains Active'}
                         </span>
                         {pinnedCount > 0 && (
                             <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">

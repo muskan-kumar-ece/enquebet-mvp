@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { 
-    Users, ShieldCheck, Crown, Award, 
+    Users, ShieldCheck, Crown, 
     UserMinus, ChevronDown, ChevronUp, History,
-    Calendar, ArrowRight
+    Calendar
 } from 'lucide-react';
 
 interface TeamRosterProps {

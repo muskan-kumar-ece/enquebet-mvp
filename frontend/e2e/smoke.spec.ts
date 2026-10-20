@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { escapeRegExp, installErrorCollection, installGlobalDialogAutoAccept, uniqueId } from './_e2eUtils';
+import { installErrorCollection, installGlobalDialogAutoAccept, uniqueId } from './_e2eUtils';
 
 async function registerViaUI(page: Page, user: { fullName: string; username: string; email: string; password: string }) {
     await page.addInitScript(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { MapPin, GraduationCap, Bell, Users } from 'lucide-react';
+import { MapPin, GraduationCap, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { api } from '@/lib/api';
@@ -9,18 +9,28 @@ import { api } from '@/lib/api';
 export default function RightPanel() {
     const { user, loading: authLoading } = useAuth();
     const [notifications, setNotifications] = useState<any[]>([]);
-    const [loadingNotifs, setLoadingNotifs] = useState(true);
+    const [fetched, setFetched] = useState(false);
 
     useEffect(() => {
         if (!authLoading && user) {
+            let cancelled = false;
             api.getNotifications()
-                .then((data) => setNotifications(Array.isArray(data) ? data.slice(0, 5) : []))
-                .catch(() => setNotifications([]))
-                .finally(() => setLoadingNotifs(false));
-        } else {
-            setLoadingNotifs(false);
+                .then((data) => {
+                    if (!cancelled) setNotifications(Array.isArray(data) ? data.slice(0, 5) : []);
+                })
+                .catch(() => {
+                    if (!cancelled) setNotifications([]);
+                })
+                .finally(() => {
+                    if (!cancelled) setFetched(true);
+                });
+            return () => {
+                cancelled = true;
+            };
         }
     }, [authLoading, user]);
+
+    const loadingNotifs = authLoading || (Boolean(user) && !fetched);
 
     // Build bio parts from real user fields
     const bioParts: string[] = [];

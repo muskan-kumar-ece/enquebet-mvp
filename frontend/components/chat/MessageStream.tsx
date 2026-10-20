@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Check, CheckCheck, Clock, Copy, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { CheckCheck, Clock, Copy, AlertCircle, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface MessageStreamProps {
@@ -12,6 +12,7 @@ interface MessageStreamProps {
     hasMore?: boolean;
     loadingMore?: boolean;
     onLoadEarlier?: () => Promise<void> | void;
+    onRetryMessage?: (msg: any) => Promise<void> | void;
 }
 
 export function MessageStream({
@@ -22,6 +23,7 @@ export function MessageStream({
     hasMore = false,
     loadingMore = false,
     onLoadEarlier,
+    onRetryMessage,
 }: MessageStreamProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -170,6 +172,7 @@ export function MessageStream({
                 const senderName = msg.sender?.full_name || msg.sender?.username || 'Builder';
                 const senderInitial = senderName.slice(0, 2).toUpperCase();
                 const isSending = msg.status === 'sending';
+                const isError = msg.status === 'error';
 
                 return (
                     <React.Fragment key={msg.client_msg_id || msg.id || index}>
@@ -215,7 +218,9 @@ export function MessageStream({
                                     <div
                                         className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md transition-all ${
                                             isMe
-                                                ? `bg-brand text-white rounded-br-sm border border-brand/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] ${isSending ? 'opacity-70' : ''}`
+                                                ? isError
+                                                    ? 'bg-rose-950/40 text-white rounded-br-sm border border-rose-500/50 shadow-[inset_0_1px_0_rgba(244,63,94,0.3)]'
+                                                    : `bg-brand text-white rounded-br-sm border border-brand/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] ${isSending ? 'opacity-70' : ''}`
                                                 : 'bg-[#0f111a] border border-[#1e2335] text-zinc-200 rounded-bl-sm'
                                         }`}
                                     >
@@ -235,18 +240,38 @@ export function MessageStream({
                                     </div>
 
                                     {/* Timestamp & Read Receipt */}
-                                    <div className={`flex items-center gap-1 text-[10px] text-zinc-400 ${isMe ? 'justify-end mr-1' : 'ml-1'}`}>
+                                    <div className={`flex items-center gap-1.5 text-[10px] text-zinc-400 ${isMe ? 'justify-end mr-1' : 'ml-1'}`}>
                                         <span>
                                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                         {isMe && (
-                                            <span title={isSending ? 'Sending...' : 'Delivered'}>
-                                                {isSending ? (
-                                                    <Clock className="w-3.5 h-3.5 text-zinc-400 animate-pulse" />
+                                            <>
+                                                {isError ? (
+                                                    <span className="flex items-center gap-1 text-rose-400 font-mono">
+                                                        <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                                                        <span>Failed</span>
+                                                        {onRetryMessage && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onRetryMessage(msg)}
+                                                                className="ml-1 text-[11px] text-rose-300 hover:text-white font-medium underline inline-flex items-center gap-0.5 transition-colors cursor-pointer"
+                                                                title="Retry sending message"
+                                                            >
+                                                                <RotateCcw className="w-2.5 h-2.5" />
+                                                                <span>Retry</span>
+                                                            </button>
+                                                        )}
+                                                    </span>
+                                                ) : isSending ? (
+                                                    <span title="Sending...">
+                                                        <Clock className="w-3.5 h-3.5 text-zinc-400 animate-pulse" />
+                                                    </span>
                                                 ) : (
-                                                    <CheckCheck className="w-3.5 h-3.5 text-brand" />
+                                                    <span title="Delivered">
+                                                        <CheckCheck className="w-3.5 h-3.5 text-brand" />
+                                                    </span>
                                                 )}
-                                            </span>
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -262,12 +287,17 @@ export function MessageStream({
                     <div className="w-7 h-7 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs flex items-center justify-center font-bold">
                         ...
                     </div>
-                    <div className="bg-[#0f111a] border border-[#1e2335] rounded-xl rounded-bl-sm px-3.5 py-2.5 shadow-sm">
+                    <div className="bg-[#0f111a] border border-[#1e2335] rounded-xl rounded-bl-sm px-3.5 py-2.5 shadow-sm flex items-center gap-2">
                         <div className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '0ms' }} />
                             <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '150ms' }} />
                             <span className="w-2 h-2 rounded-full bg-brand animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
+                        {typingUsername && (
+                            <span className="text-[11px] text-zinc-400 font-mono">
+                                {typingUsername} is typing...
+                            </span>
+                        )}
                     </div>
                 </div>
             )}

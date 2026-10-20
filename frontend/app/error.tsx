@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-    Terminal,
     RefreshCw,
     Home,
     Copy,
@@ -27,7 +26,7 @@ export default function GlobalErrorPage({ error, reset }: ErrorProps) {
     const [copied, setCopied] = useState(false);
     const [showStackTrace, setShowStackTrace] = useState(false);
     const [commandInput, setCommandInput] = useState('');
-    const [currentTime, setCurrentTime] = useState('');
+    const [currentTime] = useState(() => (typeof window !== 'undefined' ? new Date().toISOString() : ''));
     const [terminalOutput, setTerminalOutput] = useState<string[]>([
         'CRITICAL: Uncaught exception caught by React Error Boundary.',
         'Kernel state preserved. Choose a recovery routine below.',
@@ -35,8 +34,7 @@ export default function GlobalErrorPage({ error, reset }: ErrorProps) {
     const terminalEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        setCurrentTime(new Date().toISOString());
-        // Also log the error to developer console
+        // Log the error to developer console
         console.error('[ENQUEbet System Fault]:', error);
     }, [error]);
 

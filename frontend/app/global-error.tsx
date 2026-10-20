@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Terminal, RefreshCw, Home, AlertTriangle, Bug } from 'lucide-react';
+import { RefreshCw, Home, AlertTriangle } from 'lucide-react';
 
 interface GlobalErrorProps {
     error: Error & { digest?: string };
@@ -9,10 +9,9 @@ interface GlobalErrorProps {
 }
 
 export default function RootGlobalError({ error, reset }: GlobalErrorProps) {
-    const [currentTime, setCurrentTime] = useState('');
+    const [currentTime] = useState(() => (typeof window !== 'undefined' ? new Date().toISOString() : ''));
 
     useEffect(() => {
-        setCurrentTime(new Date().toISOString());
         console.error('[Root Global Fault]:', error);
     }, [error]);
 

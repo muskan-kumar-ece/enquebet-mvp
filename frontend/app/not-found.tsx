@@ -9,11 +9,7 @@ import {
     Home,
     Copy,
     Check,
-    Compass,
-    Sparkles,
-    AlertTriangle,
-    CornerDownLeft,
-    ExternalLink
+    CornerDownLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -27,12 +23,8 @@ export default function NotFound() {
         'ENQUEbet Kernel v2.0.4 [x86_64-pc-linux-gnu]',
         'Type "help" for valid execution targets, or click quick commands below.',
     ]);
-    const [currentTime, setCurrentTime] = useState<string>('');
+    const [currentTime] = useState<string>(() => (typeof window !== 'undefined' ? new Date().toISOString() : ''));
     const terminalEndRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        setCurrentTime(new Date().toISOString());
-    }, []);
 
     // Global keyboard shortcuts: Esc or Ctrl+H navigates home
     useEffect(() => {

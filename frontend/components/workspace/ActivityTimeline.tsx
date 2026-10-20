@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { 
-    Clock, ShieldCheck, CheckCircle2, GitPullRequest, 
+    Clock, ShieldCheck, GitPullRequest, 
     UserMinus, LogOut, Award, Crown, Plus, RefreshCw,
     Activity, FileText
 } from 'lucide-react';

@@ -6,7 +6,6 @@ import {
     Upload,
     Link as LinkIcon,
     FileText,
-    CheckCircle2,
     AlertCircle,
     Loader2,
     ShieldAlert,

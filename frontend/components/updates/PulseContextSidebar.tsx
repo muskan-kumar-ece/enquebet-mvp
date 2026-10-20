@@ -20,7 +20,6 @@ export function PulseContextSidebar({
     opportunities,
     lifecycleItems,
     onSelectUpdate,
-    activeTab,
     onTabChange,
 }: PulseContextSidebarProps) {
     const [newTag, setNewTag] = useState('');

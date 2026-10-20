@@ -14,7 +14,7 @@ import { ProductCard } from '@/components/shop/ProductCard';
 import { ProductDetailModal } from '@/components/shop/ProductDetailModal';
 import { ServicesGrid } from '@/components/shop/ServicesGrid';
 import { ProjectBOMDrawer } from '@/components/shop/ProjectBOMDrawer';
-import { Cpu, Search, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Search, ExternalLink, ShieldCheck } from 'lucide-react';
 
 const BOM_STORAGE_KEY = 'enquebet_project_bom';
 
@@ -33,19 +33,16 @@ export default function ShopPage() {
   const [isBOMOpen, setIsBOMOpen] = useState(false);
 
   // BOM items persisted in localStorage
-  const [bomItems, setBomItems] = useState<BOMItem[]>([]);
-
-  // Load BOM from localStorage on mount
-  useEffect(() => {
+  const [bomItems, setBomItems] = useState<BOMItem[]>(() => {
+    if (typeof window === 'undefined') return [];
     try {
       const saved = localStorage.getItem(BOM_STORAGE_KEY);
-      if (saved) {
-        setBomItems(JSON.parse(saved));
-      }
+      if (saved) return JSON.parse(saved);
     } catch {
       // ignore storage error
     }
-  }, []);
+    return [];
+  });
 
   // Sync BOM to localStorage
   const saveBOM = (newItems: BOMItem[]) => {
@@ -59,7 +56,6 @@ export default function ShopPage() {
 
   // Check for live VenopAI backend updates on mount
   useEffect(() => {
-    setIsLoading(true);
     fetchVenopaiCatalog()
       .then((res) => {
         if (res.products.length > 0) {

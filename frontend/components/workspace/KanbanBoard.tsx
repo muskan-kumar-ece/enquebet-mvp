@@ -2,9 +2,7 @@
 
 import React, { useState } from 'react';
 import { 
-    Plus, Clock, CheckCircle2, AlertCircle, 
-    FileText, User, AlertTriangle, GitPullRequest,
-    Check
+    Plus, Clock, CheckCircle2, GitPullRequest
 } from 'lucide-react';
 
 export const TASK_STATUS_COLUMNS = [
@@ -28,7 +26,7 @@ interface KanbanBoardProps {
     onSelectTask: (task: any) => void;
     onUpdateTaskStatus: (taskId: string, newStatus: string) => void;
     onOpenCreateTask: () => void;
-    isLeadOrOwner: boolean;
+    isLeadOrOwner?: boolean;
 }
 
 export function KanbanBoard({
@@ -36,7 +34,7 @@ export function KanbanBoard({
     onSelectTask,
     onUpdateTaskStatus,
     onOpenCreateTask,
-    isLeadOrOwner
+    isLeadOrOwner = false
 }: KanbanBoardProps) {
     const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
     const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -83,6 +81,11 @@ export function KanbanBoard({
                     <span className="text-xs text-text-secondary">
                         Showing <strong className="text-white">{tasks.length}</strong> tasks across 6 lifecycle columns
                     </span>
+                    {isLeadOrOwner && (
+                        <span className="text-[10px] text-brand-light font-mono bg-brand/10 px-2 py-0.5 rounded border border-brand/20">
+                            Manager View
+                        </span>
+                    )}
                     <span className="text-[11px] text-text-secondary/70 hidden sm:inline">
                         (Drag cards between columns to transition statuses)
                     </span>

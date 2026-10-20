@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { 
-    Clock, Plus, CheckCircle2, AlertCircle, 
-    Calendar, Check, ChevronRight, Flag
+    Clock, Plus, Calendar, Check, Flag
 } from 'lucide-react';
 import { PRIORITY_BADGES } from './KanbanBoard';
 

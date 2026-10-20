@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { resolveSecureWsUrl } from '@/lib/websocket';
 
 interface UseWorkspaceSocketProps {
@@ -18,6 +18,8 @@ export function useWorkspaceSocket({
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const retryCountRef = useRef(0);
     const onEventRef = useRef(onEvent);
+    const connectRef = useRef<() => Promise<void>>(() => Promise.resolve());
+    const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
         onEventRef.current = onEvent;
@@ -42,6 +44,7 @@ export function useWorkspaceSocket({
 
             ws.onopen = () => {
                 retryCountRef.current = 0;
+                setIsConnected(true);
             };
 
             ws.onmessage = (event) => {
@@ -56,6 +59,7 @@ export function useWorkspaceSocket({
             };
 
             ws.onclose = (event) => {
+                setIsConnected(false);
                 // If closed due to auth or forbidden, don't retry endlessly
                 if (event.code === 4001 || event.code === 4003) {
                     return;
@@ -66,18 +70,23 @@ export function useWorkspaceSocket({
                     const timeout = Math.min(1000 * Math.pow(1.5, retryCountRef.current), 10000);
                     retryCountRef.current += 1;
                     reconnectTimeoutRef.current = setTimeout(() => {
-                        connect();
+                        connectRef.current();
                     }, timeout);
                 }
             };
 
             ws.onerror = () => {
+                setIsConnected(false);
                 ws.close();
             };
         } catch {
             // WebSocket initialization failed
         }
     }, [workspaceId, enabled]);
+
+    useEffect(() => {
+        connectRef.current = connect;
+    }, [connect]);
 
     useEffect(() => {
         connect();
@@ -94,6 +103,6 @@ export function useWorkspaceSocket({
     }, [connect]);
 
     return {
-        isConnected: socketRef.current?.readyState === WebSocket.OPEN,
+        isConnected,
     };
 }

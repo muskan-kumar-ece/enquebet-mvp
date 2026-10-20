@@ -16,13 +16,12 @@ function MessagesContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading: authLoading } = useRequireAuth();
-    const { connectChat, onChatMessage, onChatTyping, onChatRead, sendChatTyping, sendChatRead } = useWebSocket();
+    const { connectChat, onChatMessage, onChatTyping, sendChatTyping, sendChatRead } = useWebSocket();
 
     const [conversations, setConversations] = useState<any[]>([]);
     const [selectedConvo, setSelectedConvo] = useState<any>(null);
     const [messages, setMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
     const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
     // Keyset cursor pagination states
@@ -35,38 +34,7 @@ function MessagesContent() {
     const [typingUsername, setTypingUsername] = useState<string | undefined>(undefined);
     const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Initial fetch
-    useEffect(() => {
-        if (!authLoading && user) {
-            fetchConversations();
-        }
-    }, [authLoading, user]);
-
-    // Handle deep link / query param `?convo=UUID`
-    useEffect(() => {
-        const convoId = searchParams.get('convo');
-        if (convoId && conversations.length > 0) {
-            const target = conversations.find((c) => c.id === convoId);
-            if (target && (!selectedConvo || selectedConvo.id !== target.id)) {
-                handleSelectConvo(target);
-            }
-        }
-    }, [conversations, searchParams]);
-
-    const fetchConversations = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const data = await api.getConversations();
-            setConversations(data);
-        } catch (err: any) {
-            setError(err.message || 'Failed to load conversations');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSelectConvo = async (convo: any) => {
+    const handleSelectConvo = useCallback(async (convo: any) => {
         setSelectedConvo(convo);
         setMobileView('chat');
         setMessages([]);
@@ -89,7 +57,37 @@ function MessagesContent() {
         // Connect WebSocket and send initial read receipt
         connectChat(convo.id);
         sendChatRead();
-    };
+    }, [connectChat, sendChatRead]);
+
+    const fetchConversations = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await api.getConversations();
+            setConversations(data);
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to load conversations');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Initial fetch
+    useEffect(() => {
+        if (!authLoading && user) {
+            fetchConversations();
+        }
+    }, [authLoading, user, fetchConversations]);
+
+    // Handle deep link / query param `?convo=UUID`
+    useEffect(() => {
+        const convoId = searchParams.get('convo');
+        if (convoId && conversations.length > 0) {
+            const target = conversations.find((c) => c.id === convoId);
+            if (target && (!selectedConvo || selectedConvo.id !== target.id)) {
+                handleSelectConvo(target);
+            }
+        }
+    }, [conversations, searchParams, selectedConvo, handleSelectConvo]);
 
     // Load Earlier Messages via Keyset Cursor (Scroll Anchoring)
     const handleLoadEarlier = async () => {
@@ -115,7 +113,7 @@ function MessagesContent() {
                 const filtered = olderMessages.filter((m: any) => !existingIds.has(m.id));
                 return [...filtered, ...prev];
             });
-        } catch (err: any) {
+        } catch {
             toast.error('Could not load earlier messages');
         } finally {
             setLoadingMore(false);
@@ -223,6 +221,52 @@ function MessagesContent() {
                 )
             );
             toast.error(err.message || 'Failed to send message');
+            throw err;
+        }
+    };
+
+    // Retry sending a previously failed message
+    const handleRetryMessage = async (failedMsg: any) => {
+        if (!selectedConvo) return;
+        const trackingId = failedMsg.client_msg_id || failedMsg.id;
+
+        setMessages((prev) =>
+            prev.map((m) =>
+                m.client_msg_id === trackingId || m.id === trackingId
+                    ? { ...m, status: 'sending' }
+                    : m
+            )
+        );
+
+        try {
+            const sentMessage = await api.sendMessage(
+                selectedConvo.id,
+                failedMsg.content,
+                failedMsg.attachment_url,
+                trackingId
+            );
+
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.client_msg_id === trackingId || m.id === trackingId
+                        ? { ...sentMessage, is_me: true, status: 'delivered' }
+                        : m
+                )
+            );
+
+            setConversations((prev) =>
+                prev.map((c) => (c.id === selectedConvo.id ? { ...c, last_message: sentMessage } : c))
+            );
+            toast.success('Message sent!');
+        } catch (err: any) {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.client_msg_id === trackingId || m.id === trackingId
+                        ? { ...m, status: 'error' }
+                        : m
+                )
+            );
+            toast.error(err.message || 'Retry failed');
         }
     };
 
@@ -288,6 +332,7 @@ function MessagesContent() {
                             hasMore={hasMore}
                             loadingMore={loadingMore}
                             onLoadEarlier={handleLoadEarlier}
+                            onRetryMessage={handleRetryMessage}
                         />
                         <MessageComposer
                             onSend={handleSendMessage}

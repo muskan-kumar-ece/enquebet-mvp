@@ -3,14 +3,12 @@
 import React, { useState } from 'react';
 import {
     Download,
-    Eye,
     ExternalLink,
     Clock,
     CheckCircle2,
     XCircle,
     Check,
     X,
-    FileText,
     User as UserIcon,
     AlertTriangle,
 } from 'lucide-react';

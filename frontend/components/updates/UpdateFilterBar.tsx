@@ -6,7 +6,6 @@ import {
     X, 
     ChevronDown, 
     Check, 
-    SlidersHorizontal, 
     ListFilter, 
     LayoutList, 
     FileText 
@@ -170,7 +169,7 @@ export function UpdateFilterBar({
             {/* Active Filter Chips */}
             {hasActiveFilters && (
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                    <span className="text-text-muted font-mono text-[11px]">Filtered by:</span>
+                    <span className="text-text-muted font-mono text-[11px]">Filtered by ({totalResults} results):</span>
 
                     {activeCategory !== 'all' && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/25 text-brand-light">

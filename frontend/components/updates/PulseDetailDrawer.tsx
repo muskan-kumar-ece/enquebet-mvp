@@ -7,18 +7,15 @@ import {
     ExternalLink, 
     Download, 
     Bookmark, 
-    Calendar, 
-    Clock, 
     Sparkles, 
     Check, 
     BookOpen, 
     Wrench, 
-    Layers, 
     ShieldCheck, 
-    AlertCircle, 
     FileText,
     ArrowUpRight,
-    User
+    User,
+    Clock
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 
@@ -38,13 +35,13 @@ export function PulseDetailDrawer({
     onOpenBuildModal,
 }: PulseDetailDrawerProps) {
     const [copied, setCopied] = useState(false);
-    const [saved, setSaved] = useState(false);
+    const [saved, setSaved] = useState(Boolean(update?.is_saved));
+    const [prevUpdateId, setPrevUpdateId] = useState(update?.id);
 
-    useEffect(() => {
-        if (update) {
-            setSaved(Boolean(update.is_saved));
-        }
-    }, [update]);
+    if (update && update.id !== prevUpdateId) {
+        setPrevUpdateId(update.id);
+        setSaved(Boolean(update.is_saved));
+    }
 
     // Handle escape key
     useEffect(() => {

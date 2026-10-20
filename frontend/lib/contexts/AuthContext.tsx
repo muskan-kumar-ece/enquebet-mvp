@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     // Verify token is still valid by fetching profile
                     const profile = await api.getProfile();
                     setUser(profile);
-                } catch (err) {
+                } catch {
                     // Token expired or invalid
                     api.clearToken();
                     localStorage.removeItem('accessToken');

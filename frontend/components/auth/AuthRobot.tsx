@@ -33,13 +33,15 @@ export function AuthRobot({
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [isBlinking, setIsBlinking] = useState(false);
     const [shakeKey, setShakeKey] = useState(0);
+    const [prevHasError, setPrevHasError] = useState(hasError);
 
     // Trigger head shake whenever hasError flips to true
-    useEffect(() => {
+    if (hasError !== prevHasError) {
+        setPrevHasError(hasError);
         if (hasError) {
             setShakeKey((prev) => prev + 1);
         }
-    }, [hasError]);
+    }
 
     // Natural blinking cycle every 4-5 seconds
     useEffect(() => {

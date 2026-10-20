@@ -1,23 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
     X, 
-    Upload, 
-    FileText, 
-    ExternalLink, 
-    Plus, 
-    Trash2, 
-    Pin, 
-    Image as ImageIcon, 
     Loader2, 
     AlertCircle, 
-    Eye, 
-    Edit3,
-    Sparkles,
-    ShieldAlert,
-    Wrench,
-    Flame
+    Sparkles
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
@@ -90,18 +78,11 @@ export function PostUpdateModal({
     const [coverImage, setCoverImage] = useState('');
     const [documents, setDocuments] = useState<AttachedDoc[]>([]);
     const [externalLinks, setExternalLinks] = useState<ExternalLinkItem[]>([]);
-    const [newLinkTitle, setNewLinkTitle] = useState('');
-    const [newLinkUrl, setNewLinkUrl] = useState('');
 
     // UI state
     const [contentTab, setContentTab] = useState<'write' | 'preview'>('write');
-    const [isUploadingImage, setIsUploadingImage] = useState(false);
-    const [isUploadingDoc, setIsUploadingDoc] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-    const imageInputRef = useRef<HTMLInputElement>(null);
-    const docInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (initialData) {
@@ -149,48 +130,6 @@ export function PostUpdateModal({
     }, [initialData, isOpen]);
 
     if (!isOpen) return null;
-
-    const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setIsUploadingImage(true);
-        try {
-            const res = await api.uploadImage(file);
-            if (res.url) setCoverImage(res.url);
-        } catch (err: any) {
-            toast.error(err.message || 'Image upload failed');
-        } finally {
-            setIsUploadingImage(false);
-        }
-    };
-
-    const handleDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setIsUploadingDoc(true);
-        try {
-            const res = await api.uploadDocument(file);
-            if (res.url) {
-                setDocuments(prev => [...prev, {
-                    name: res.original_filename || file.name,
-                    url: res.url,
-                    file_format: file.name.split('.').pop()?.toLowerCase(),
-                    file_size_bytes: res.file_size_bytes || file.size,
-                }]);
-            }
-        } catch (err: any) {
-            toast.error(err.message || 'Doc upload failed');
-        } finally {
-            setIsUploadingDoc(false);
-        }
-    };
-
-    const handleAddLink = () => {
-        if (!newLinkTitle.trim() || !newLinkUrl.trim()) return;
-        setExternalLinks(prev => [...prev, { title: newLinkTitle.trim(), url: newLinkUrl.trim() }]);
-        setNewLinkTitle('');
-        setNewLinkUrl('');
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

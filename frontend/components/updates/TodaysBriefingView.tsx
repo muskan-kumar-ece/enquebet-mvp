@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame, ArrowRight, Bookmark, Clock, ExternalLink, Sparkles, Code2, ShieldAlert, Cpu, Wrench, PlusCircle, Check } from 'lucide-react';
+import { Flame, ArrowRight, Bookmark, Clock, Wrench } from 'lucide-react';
 import { PulseCard } from './PulseCard';
 import { useState } from 'react';
 
@@ -149,10 +149,12 @@ export function TodaysBriefingView({
                 <div>
                     <h3 className="text-base sm:text-lg font-bold text-white font-mono flex items-center gap-2">
                         <span>Crucial Daily Developments</span>
-                        <span className="text-xs font-normal text-zinc-400">({dailyDevelopments.length} curated)</span>
+                        <span className="text-xs font-normal text-zinc-400">
+                            ({dailyDevelopments.length} curated {dateStr ? `· ${dateStr}` : ''})
+                        </span>
                     </h3>
                     <p className="text-xs text-zinc-400">
-                        High-impact releases, security advisories, and engineering dispatches from the last 24 hours.
+                        High-impact releases, security advisories, and engineering dispatches from the last 24 hours ({totalRecent} monitored).
                     </p>
                 </div>
             </div>

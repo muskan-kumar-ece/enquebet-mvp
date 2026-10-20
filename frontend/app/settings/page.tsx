@@ -30,20 +30,9 @@ function SettingsContent() {
         'account', 'security', 'time', 'professional', 
         'saved', 'safety', 'about', 'legal', 'danger'
     ];
-    const initialTab = validTabs.includes(paramTab) ? paramTab : 'account';
-
-    const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-
-    // Sync tab from URL if changed externally
-    useEffect(() => {
-        const currentParam = searchParams.get('tab') as SettingsTab;
-        if (currentParam && validTabs.includes(currentParam) && currentParam !== activeTab) {
-            setActiveTab(currentParam);
-        }
-    }, [searchParams]);
+    const activeTab: SettingsTab = validTabs.includes(paramTab) ? paramTab : 'account';
 
     const handleSelectTab = (tab: SettingsTab) => {
-        setActiveTab(tab);
         const url = tab === 'account' ? '/settings' : `/settings?tab=${tab}`;
         router.replace(url, { scroll: false });
     };

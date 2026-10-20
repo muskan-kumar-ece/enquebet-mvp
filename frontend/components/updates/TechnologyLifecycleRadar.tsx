@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { RefreshCw, AlertTriangle, CheckCircle, ExternalLink, ArrowRight, ShieldAlert, BookOpen, Layers } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle, ExternalLink, ArrowRight, ShieldAlert } from 'lucide-react';
 
 interface TechnologyLifecycleRadarProps {
     items: any[];

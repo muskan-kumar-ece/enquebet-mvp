@@ -5,16 +5,12 @@ import {
     X,
     Download,
     ExternalLink,
-    Eye,
     Clock,
     CheckCircle2,
     XCircle,
     Copy,
     Check,
-    FileText,
     User,
-    Calendar,
-    ShieldAlert,
     AlertTriangle,
 } from 'lucide-react';
 import { ResourceItem, getFileTypeBadgeStyle, formatBytes } from '@/lib/resourcesData';

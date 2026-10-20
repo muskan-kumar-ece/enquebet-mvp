@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { 
     Bookmark, 
     Share2, 
-    ExternalLink, 
     ArrowRight, 
     Edit2, 
     Trash2, 
@@ -20,8 +19,7 @@ import {
     RefreshCw, 
     Rocket, 
     Compass,
-    AlertTriangle,
-    CheckCircle2
+    AlertTriangle
 } from 'lucide-react';
 
 interface PulseCardProps {
