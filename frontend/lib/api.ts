@@ -1415,8 +1415,81 @@ class ApiClient {
             category_counts: Record<string, number>;
         }>('/updates/stats/');
     }
-}
 
+    // ==========================================
+    // ENQUEbet Academy API
+    // ==========================================
+
+    async getCourses(params?: Record<string, string>) {
+        const query = params ? '?' + new URLSearchParams(params).toString() : '';
+        return this.request<any>(`/courses/${query}`);
+    }
+
+    async getCourse(slug: string) {
+        return this.request<any>(`/courses/${slug}/`);
+    }
+
+    async enrollCourse(slug: string) {
+        return this.request<{ detail: string; enrollment: any }>(`/courses/${slug}/enroll/`, {
+            method: 'POST',
+        });
+    }
+
+    async toggleCourseBookmark(slug: string) {
+        return this.request<{ bookmarked: boolean; detail: string }>(`/courses/${slug}/bookmark/`, {
+            method: 'POST',
+        });
+    }
+
+    async getCourseCategories() {
+        return this.request<any[]>('/courses/categories/');
+    }
+
+    async getAcademyStats() {
+        return this.request<any>('/courses/stats/');
+    }
+
+    async getCourseProgress(slug: string) {
+        return this.request<any>(`/courses/${slug}/progress/`);
+    }
+
+    async getLesson(lessonId: string) {
+        return this.request<any>(`/courses/lessons/${lessonId}/`);
+    }
+
+    async toggleLessonComplete(lessonId: string, isCompleted?: boolean) {
+        return this.request<any>(`/courses/lessons/${lessonId}/toggle_complete/`, {
+            method: 'POST',
+            body: JSON.stringify(isCompleted !== undefined ? { is_completed: isCompleted } : {}),
+        });
+    }
+
+    async updateLessonPosition(lessonId: string, positionSeconds: number) {
+        return this.request<any>(`/courses/lessons/${lessonId}/update_position/`, {
+            method: 'POST',
+            body: JSON.stringify({ position_seconds: positionSeconds }),
+        });
+    }
+
+    async getAssignment(assignmentId: string) {
+        return this.request<any>(`/courses/assignments/${assignmentId}/`);
+    }
+
+    async submitAssignment(assignmentId: string, payload: {
+        repository_url?: string;
+        deliverable_url?: string;
+        submission_text?: string;
+    }) {
+        return this.request<any>(`/courses/assignments/${assignmentId}/submit/`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
+
+    async getCertificate(certificateCode: string) {
+        return this.request<any>(`/courses/certificates/${certificateCode}/`);
+    }
+}
 
 export const api = new ApiClient(API_BASE_URL);
 

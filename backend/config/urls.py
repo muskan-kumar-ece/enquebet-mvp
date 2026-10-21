@@ -51,6 +51,8 @@ urlpatterns = [
     path('api/v1/research/', include('apps.research.urls')),
     path('api/v1/resources/', include('apps.resources.urls')),
     path('api/v1/updates/', include('apps.updates.urls')),
+    path('api/v1/courses/', include('apps.courses.urls')),
+    path('api/v1/academy/', include('apps.courses.urls')),
 
     # Spec-friendly aliases (information.md uses /api/...)
     path('api/auth/', include('apps.users.urls')),
@@ -67,6 +69,8 @@ urlpatterns = [
     path('api/research/', include('apps.research.urls')),
     path('api/resources/', include('apps.resources.urls')),
     path('api/updates/', include('apps.updates.urls')),
+    path('api/courses/', include('apps.courses.urls')),
+    path('api/academy/', include('apps.courses.urls')),
 ]
 
 if settings.DEBUG:

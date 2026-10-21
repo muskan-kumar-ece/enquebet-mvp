@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'apps.research',
     'apps.resources',
     'apps.updates',
+    'apps.courses.apps.CoursesConfig',
 ]
 
 MIDDLEWARE = [
