@@ -96,10 +96,19 @@ export class WebSocketManager {
     send(data: object) {
         if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(data));
+        } else if (this.ws?.readyState === WebSocket.CONNECTING) {
+            const onOpen = () => {
+                if (this.ws?.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(data));
+                }
+                this.off('connected', onOpen);
+            };
+            this.on('connected', onOpen);
         } else {
             console.warn('[WS] Cannot send — not connected');
         }
     }
+
 
     on(event: string, handler: EventHandler): () => void {
         if (!this.handlers.has(event)) {

@@ -270,9 +270,10 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                                 <button
                                     type="submit"
                                     disabled={changingPassword}
-                                    className="btn-brand px-4 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                    aria-busy={changingPassword}
+                                    className="btn-brand px-4 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-1.5 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
                                 >
-                                    <Lock className="w-3.5 h-3.5" />
+                                    {changingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                                     <span>{changingPassword ? 'Setting Master Password...' : 'Create Master Password'}</span>
                                 </button>
                             </div>
@@ -334,9 +335,10 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                                 <button
                                     type="submit"
                                     disabled={changingPassword}
-                                    className="btn-brand px-4 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                    aria-busy={changingPassword}
+                                    className="btn-brand px-4 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-1.5 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
                                 >
-                                    <Lock className="w-3.5 h-3.5" />
+                                    {changingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                                     <span>{changingPassword ? 'Updating Password...' : 'Update Password'}</span>
                                 </button>
                             </div>
@@ -389,17 +391,18 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                             <button
                                 type="button"
                                 disabled={disconnectingProvider === 'google'}
+                                aria-busy={disconnectingProvider === 'google'}
                                 onClick={() => handleDisconnectProvider('google')}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
                             >
-                                <Unlink className="w-3.5 h-3.5" />
+                                {disconnectingProvider === 'google' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
                                 <span>{disconnectingProvider === 'google' ? 'Disconnecting...' : 'Disconnect'}</span>
                             </button>
                         ) : (
                             <button
                                 type="button"
                                 onClick={() => handleConnectProvider('google')}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-hover text-slate-200 hover:text-white border border-[#1e2335] flex items-center gap-1.5 transition-all"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-hover text-slate-200 hover:text-white border border-[#1e2335] flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-[#1864ff]"
                             >
                                 <Link2 className="w-3.5 h-3.5 text-[#1864ff]" />
                                 <span>Connect</span>
@@ -437,17 +440,18 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                             <button
                                 type="button"
                                 disabled={disconnectingProvider === 'github'}
+                                aria-busy={disconnectingProvider === 'github'}
                                 onClick={() => handleDisconnectProvider('github')}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
                             >
-                                <Unlink className="w-3.5 h-3.5" />
+                                {disconnectingProvider === 'github' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
                                 <span>{disconnectingProvider === 'github' ? 'Disconnecting...' : 'Disconnect'}</span>
                             </button>
                         ) : (
                             <button
                                 type="button"
                                 onClick={() => handleConnectProvider('github')}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-hover text-slate-200 hover:text-white border border-[#1e2335] flex items-center gap-1.5 transition-all"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-hover text-slate-200 hover:text-white border border-[#1e2335] flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-[#1864ff]"
                             >
                                 <Link2 className="w-3.5 h-3.5 text-[#1864ff]" />
                                 <span>Connect</span>
@@ -474,10 +478,12 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                         <button
                             type="button"
                             disabled={revokingAllOthers}
+                            aria-busy={revokingAllOthers}
                             onClick={handleRevokeAllOthers}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 transition-all shrink-0 self-start sm:self-auto"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 shrink-0 self-start sm:self-auto flex items-center gap-1.5"
                         >
-                            {revokingAllOthers ? 'Revoking...' : 'Log Out All Other Devices'}
+                            {revokingAllOthers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            <span>{revokingAllOthers ? 'Revoking Sessions...' : 'Log Out All Other Devices'}</span>
                         </button>
                     )}
                 </div>
@@ -552,10 +558,11 @@ export function SecuritySection({ onPasswordChanged }: SecuritySectionProps) {
                                         <button
                                             type="button"
                                             disabled={revokingSessionId === s.id}
+                                            aria-busy={revokingSessionId === s.id}
                                             onClick={() => handleRevokeSession(s.id)}
-                                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all self-end sm:self-auto"
+                                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-rose-500/10 text-slate-300 hover:text-rose-400 border border-[#1e2335] hover:border-rose-500/30 flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 self-end sm:self-auto"
                                         >
-                                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                            {revokingSessionId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" /> : <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
                                             <span>{revokingSessionId === s.id ? 'Revoking...' : 'Revoke'}</span>
                                         </button>
                                     )}

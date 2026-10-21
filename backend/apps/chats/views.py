@@ -3,7 +3,7 @@ Messages Views
 """
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch, Q, OuterRef, Subquery, Count
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework import generics, status
@@ -15,6 +15,8 @@ from django.contrib.auth import get_user_model
 from .models import Conversation, ConversationMember, Message
 from .serializers import ConversationSerializer, MessageSerializer
 from apps.notifications.models import Notification
+from apps.posts.models import Post
+from apps.collaboration.models import Workspace
 
 User = get_user_model()
 
@@ -44,9 +46,19 @@ class ConversationListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        latest_msg = Message.objects.filter(
+            conversation=OuterRef('pk')
+        ).order_by('-created_at')
+
         qs = Conversation.objects.filter(
             members__user=self.request.user
-        ).distinct().prefetch_related(
+        ).distinct().annotate(
+            last_message_content=Subquery(latest_msg.values('content')[:1]),
+            last_message_created_at=Subquery(latest_msg.values('created_at')[:1]),
+            last_message_sender_username=Subquery(latest_msg.values('sender__username')[:1]),
+            annotated_project_title=Subquery(Post.objects.filter(id=OuterRef('project_id')).values('title')[:1]),
+            annotated_workspace_id=Subquery(Workspace.objects.filter(post_id=OuterRef('project_id')).values('id')[:1]),
+        ).prefetch_related(
             Prefetch('members', queryset=ConversationMember.objects.select_related('user')),
         ).order_by('-updated_at')
 
@@ -67,6 +79,43 @@ class ConversationListCreateView(generics.ListCreateAPIView):
             ).distinct()
 
         return qs
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        conversations = list(queryset)
+
+        if conversations and request.user.is_authenticated:
+            # Batch calculate unread counts in exactly 1 query using prefetched members
+            convo_read_map = {}
+            for c in conversations:
+                member = next((m for m in c.members.all() if m.user_id == request.user.id), None)
+                convo_read_map[c.id] = member.last_read_at if member else None
+
+            q_filter = Q()
+            for cid, last_read in convo_read_map.items():
+                if last_read:
+                    q_filter |= Q(conversation_id=cid, created_at__gt=last_read)
+                else:
+                    q_filter |= Q(conversation_id=cid)
+
+            unread_counts = {}
+            if q_filter:
+                counts_qs = (
+                    Message.objects.filter(conversation_id__in=convo_read_map.keys())
+                    .exclude(sender=request.user)
+                    .filter(q_filter)
+                    .values('conversation_id')
+                    .annotate(total=Count('id'))
+                )
+                for item in counts_qs:
+                    unread_counts[item['conversation_id']] = item['total']
+
+            for c in conversations:
+                c.annotated_unread_count = unread_counts.get(c.id, 0)
+
+        serializer = self.get_serializer(conversations, many=True)
+        return Response(serializer.data)
+
 
     def create(self, request, *args, **kwargs):
         participant_id = request.data.get('participant_id') or request.data.get('user_id')
@@ -254,20 +303,19 @@ class ConversationMessagesView(generics.ListCreateAPIView):
         from django.contrib.auth import get_user_model
         UserModel = get_user_model()
         snippet = (message.content or '')[:40]
-        for uid in other_user_ids:
-            recipient = UserModel.objects.filter(id=uid).first()
-            if recipient:
-                NotificationService.send_event(
-                    recipient=recipient,
-                    actor=self.request.user,
-                    event_type='message',
-                    target_type='conversation',
-                    target_id=str(conversation.id),
-                    priority='personal',
-                    message_template=f'New message from {self.request.user.username}',
-                    data={'conversation_id': str(conversation.id), 'snippet': snippet},
-                    group_key=f"conversation:{conversation.id}:message",
-                )
+        recipients = list(UserModel.objects.filter(id__in=other_user_ids))
+        for recipient in recipients:
+            NotificationService.send_event(
+                recipient=recipient,
+                actor=self.request.user,
+                event_type='message',
+                target_type='conversation',
+                target_id=str(conversation.id),
+                priority='personal',
+                message_template=f'New message from {self.request.user.username}',
+                data={'conversation_id': str(conversation.id), 'snippet': snippet},
+                group_key=f"conversation:{conversation.id}:message",
+            )
 
         payload = MessageSerializer(message, context={'request': self.request}).data
         _broadcast_chat_message(str(conversation.id), payload)
@@ -339,20 +387,20 @@ class SendMessageAliasView(APIView):
         from django.contrib.auth import get_user_model
         UserModel = get_user_model()
         snippet = (message.content or '')[:40]
-        for uid in other_user_ids:
-            recipient = UserModel.objects.filter(id=uid).first()
-            if recipient:
-                NotificationService.send_event(
-                    recipient=recipient,
-                    actor=request.user,
-                    event_type='message',
-                    target_type='conversation',
-                    target_id=str(conversation.id),
-                    priority='personal',
-                    message_template=f'New message from {request.user.username}',
-                    data={'conversation_id': str(conversation.id), 'snippet': snippet},
-                    group_key=f"conversation:{conversation.id}:message",
-                )
+        recipients = list(UserModel.objects.filter(id__in=other_user_ids))
+        for recipient in recipients:
+            NotificationService.send_event(
+                recipient=recipient,
+                actor=request.user,
+                event_type='message',
+                target_type='conversation',
+                target_id=str(conversation.id),
+                priority='personal',
+                message_template=f'New message from {request.user.username}',
+                data={'conversation_id': str(conversation.id), 'snippet': snippet},
+                group_key=f"conversation:{conversation.id}:message",
+            )
+
 
         data = MessageSerializer(message, context={'request': request}).data
         _broadcast_chat_message(str(conversation.id), data)

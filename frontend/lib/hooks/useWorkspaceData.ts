@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -8,6 +9,7 @@ import { useWorkspaceSocket } from '@/lib/hooks/useWorkspaceSocket';
 import type {
     WorkspaceDetail,
     WorkspaceMember,
+    WorkspaceRole,
     WorkspaceTask,
     ProjectMilestone,
     WorkspaceActivity,
@@ -46,7 +48,26 @@ export function useWorkspaceData({
     // Selected task for drawer
     const [selectedTask, setSelectedTask] = useState<WorkspaceTask | null>(null);
 
-    // Fetch initial data
+    // Debounced activity log refresh timer
+    const activityRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const triggerDebouncedActivityRefresh = useCallback(() => {
+        if (activityRefreshTimerRef.current) clearTimeout(activityRefreshTimerRef.current);
+        activityRefreshTimerRef.current = setTimeout(() => {
+            api.getWorkspaceActivity(workspaceId)
+                .then((act) => setActivity(act as WorkspaceActivity[]))
+                .catch(() => {});
+        }, 1500);
+    }, [workspaceId]);
+
+    useEffect(() => {
+        return () => {
+            if (activityRefreshTimerRef.current) {
+                clearTimeout(activityRefreshTimerRef.current);
+            }
+        };
+    }, []);
+
+    // Fetch initial data concurrently in a single parallel round-trip
     const loadAllWorkspaceData = useCallback(async () => {
         if (!workspaceId) return;
         setLoading(true);
@@ -54,20 +75,20 @@ export function useWorkspaceData({
         setErrorMessage('');
 
         try {
-            const wsData = (await api.getWorkspace(workspaceId)) as WorkspaceDetail;
-            setWorkspace(wsData);
-
-            const [mems, tks, mls, act] = await Promise.all([
+            const [wsData, mems, tks, mls, act] = await Promise.all([
+                api.getWorkspace(workspaceId) as Promise<WorkspaceDetail>,
                 api.getWorkspaceMembers(workspaceId) as Promise<WorkspaceMember[]>,
                 api.getWorkspaceTasks(workspaceId) as Promise<WorkspaceTask[]>,
                 api.getWorkspaceMilestones(workspaceId) as Promise<ProjectMilestone[]>,
                 api.getWorkspaceActivity(workspaceId) as Promise<WorkspaceActivity[]>,
             ]);
 
+            setWorkspace(wsData);
             setMembers(mems || []);
             setTasks(tks || []);
             setMilestones(mls || []);
             setActivity(act || []);
+
 
             if (wsData.status === 'completed') {
                 try {
@@ -114,7 +135,7 @@ export function useWorkspaceData({
                             return exists ? prev : [data.task, ...prev];
                         });
                         if (isFromOtherUser) toast.success(`New task added: "${data.task.title}"`);
-                        api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                        triggerDebouncedActivityRefresh();
                     }
                     break;
 
@@ -122,37 +143,119 @@ export function useWorkspaceData({
                     if (data?.task) {
                         setTasks((prev) => prev.map((t) => (t.id === data.task.id ? data.task : t)));
                         setSelectedTask((prev) => (prev?.id === data.task.id ? data.task : prev));
-                        api.getWorkspace(workspaceId).then((ws) => setWorkspace(ws as WorkspaceDetail));
-                        api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                        triggerDebouncedActivityRefresh();
                     }
                     break;
 
                 case 'deliverable_submitted':
                     if (data?.task_id) {
-                        api.getWorkspaceTasks(workspaceId).then((updated) => {
-                            setTasks(updated as WorkspaceTask[]);
-                            setSelectedTask((prev) =>
-                                prev?.id === data.task_id ? (updated as WorkspaceTask[]).find((t) => t.id === data.task_id) || prev : prev
+                        if (data.deliverable) {
+                            setTasks((prev) =>
+                                prev.map((t) => {
+                                    if (t.id === data.task_id) {
+                                        const prevDeliverables = t.deliverables || [];
+                                        const exists = prevDeliverables.some((d) => d.id === data.deliverable.id);
+                                        const updatedDeliverables = exists
+                                            ? prevDeliverables.map((d) => (d.id === data.deliverable.id ? data.deliverable : d))
+                                            : [...prevDeliverables, data.deliverable];
+                                        return {
+                                            ...t,
+                                            status: 'review' as TaskStatus,
+                                            deliverables: updatedDeliverables,
+                                        };
+                                    }
+                                    return t;
+                                })
                             );
-                        });
+                            setSelectedTask((prev) => {
+                                if (!prev || prev.id !== data.task_id) return prev;
+                                const prevDeliverables = prev.deliverables || [];
+                                const exists = prevDeliverables.some((d) => d.id === data.deliverable.id);
+                                const updatedDeliverables = exists
+                                    ? prevDeliverables.map((d) => (d.id === data.deliverable.id ? data.deliverable : d))
+                                    : [...prevDeliverables, data.deliverable];
+                                return {
+                                    ...prev,
+                                    status: 'review' as TaskStatus,
+                                    deliverables: updatedDeliverables,
+                                };
+                            });
+                        } else {
+                            api.getWorkspaceTasks(workspaceId).then((updated) => {
+                                setTasks(updated as WorkspaceTask[]);
+                                setSelectedTask((prev) =>
+                                    prev?.id === data.task_id ? (updated as WorkspaceTask[]).find((t) => t.id === data.task_id) || prev : prev
+                                );
+                            });
+                        }
                         if (isFromOtherUser) toast('New deliverable submitted for review', { icon: '📦' });
-                        api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                        triggerDebouncedActivityRefresh();
                     }
                     break;
 
                 case 'deliverable_reviewed':
                     if (data?.task_id) {
-                        api.getWorkspaceTasks(workspaceId).then((updated) => {
-                            setTasks(updated as WorkspaceTask[]);
-                            setSelectedTask((prev) =>
-                                prev?.id === data.task_id ? (updated as WorkspaceTask[]).find((t) => t.id === data.task_id) || prev : prev
+                        if (data.review) {
+                            const rawStatus = data.task_status;
+                            const nextStatus = rawStatus === 'in_review' ? 'review' : rawStatus;
+                            setTasks((prev) =>
+                                prev.map((t) => {
+                                    if (t.id === data.task_id) {
+                                        const updatedDeliverables = (t.deliverables || []).map((d) => {
+                                            if (d.id === data.review.deliverable) {
+                                                const prevReviews = d.reviews || [];
+                                                const exists = prevReviews.some((r) => r.id === data.review.id);
+                                                return {
+                                                    ...d,
+                                                    reviews: exists
+                                                        ? prevReviews.map((r) => (r.id === data.review.id ? data.review : r))
+                                                        : [...prevReviews, data.review],
+                                                };
+                                            }
+                                            return d;
+                                        });
+                                        return {
+                                            ...t,
+                                            ...(nextStatus ? { status: nextStatus as TaskStatus } : {}),
+                                            deliverables: updatedDeliverables,
+                                        };
+                                    }
+                                    return t;
+                                })
                             );
-                        });
-                        api.getWorkspace(workspaceId).then((ws) => setWorkspace(ws as WorkspaceDetail));
-                        api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                            setSelectedTask((prev) => {
+                                if (!prev || prev.id !== data.task_id) return prev;
+                                const updatedDeliverables = (prev.deliverables || []).map((d) => {
+                                    if (d.id === data.review.deliverable) {
+                                        const prevReviews = d.reviews || [];
+                                        const exists = prevReviews.some((r) => r.id === data.review.id);
+                                        return {
+                                            ...d,
+                                            reviews: exists
+                                                ? prevReviews.map((r) => (r.id === data.review.id ? data.review : r))
+                                                : [...prevReviews, data.review],
+                                        };
+                                    }
+                                    return d;
+                                });
+                                return {
+                                    ...prev,
+                                    ...(nextStatus ? { status: nextStatus as TaskStatus } : {}),
+                                    deliverables: updatedDeliverables,
+                                };
+                            });
+                        } else {
+                            api.getWorkspaceTasks(workspaceId).then((updated) => {
+                                setTasks(updated as WorkspaceTask[]);
+                                setSelectedTask((prev) =>
+                                    prev?.id === data.task_id ? (updated as WorkspaceTask[]).find((t) => t.id === data.task_id) || prev : prev
+                                );
+                            });
+                        }
                         if (isFromOtherUser) {
                             toast(`Deliverable reviewed: ${data.review?.verdict?.replace('_', ' ')}`, { icon: '🛡️' });
                         }
+                        triggerDebouncedActivityRefresh();
                     }
                     break;
 
@@ -163,15 +266,38 @@ export function useWorkspaceData({
                             return exists ? prev : [...prev, data.milestone];
                         });
                         if (isFromOtherUser) toast.success(`Milestone created: "${data.milestone.title}"`);
-                        api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                        triggerDebouncedActivityRefresh();
                     }
                     break;
 
                 case 'member_updated':
+                    if (data?.member_id && data?.role) {
+                        setMembers((prev) =>
+                            prev.map((m) => (m.id === data.member_id ? { ...m, role: data.role as WorkspaceRole } : m))
+                        );
+                    } else {
+                        api.getWorkspaceMembers(workspaceId).then((mems) => setMembers(mems as WorkspaceMember[]));
+                    }
+                    triggerDebouncedActivityRefresh();
+                    break;
+
                 case 'member_left':
                 case 'member_removed':
-                    api.getWorkspaceMembers(workspaceId).then((mems) => setMembers(mems as WorkspaceMember[]));
-                    api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+                    if (data?.user_id) {
+                        setMembers((prev) => prev.filter((m) => m.user?.id !== data.user_id));
+                        if (data.tasks_unassigned) {
+                            setTasks((prev) =>
+                                prev.map((t) =>
+                                    t.assignee?.id === data.user_id
+                                        ? { ...t, assignee: null, status: 'backlog' as TaskStatus }
+                                        : t
+                                )
+                            );
+                        }
+                    } else {
+                        api.getWorkspaceMembers(workspaceId).then((mems) => setMembers(mems as WorkspaceMember[]));
+                    }
+                    triggerDebouncedActivityRefresh();
                     break;
 
                 case 'project_completed':
@@ -195,7 +321,7 @@ export function useWorkspaceData({
                     break;
             }
         },
-        [workspaceId, currentUser]
+        [workspaceId, currentUser, triggerDebouncedActivityRefresh]
     );
 
     useWorkspaceSocket({
@@ -235,10 +361,10 @@ export function useWorkspaceData({
             const task = (await api.createWorkspaceTask(workspaceId, data)) as WorkspaceTask;
             setTasks((prev) => [task, ...prev]);
             toast.success('Task created');
-            api.getWorkspaceActivity(workspaceId).then((act) => setActivity(act as WorkspaceActivity[]));
+            triggerDebouncedActivityRefresh();
             return task;
         },
-        [workspaceId]
+        [workspaceId, triggerDebouncedActivityRefresh]
     );
 
     const submitDeliverable = useCallback(

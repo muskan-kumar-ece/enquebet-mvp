@@ -40,7 +40,11 @@ class WorkspaceLookupMixin:
             return Workspace.objects.select_related('post', 'post__user').prefetch_related(
                 'milestones', 'memberships__user'
             ).annotate(
-                annotated_tasks_count=Count('tasks', distinct=True),
+                annotated_tasks_count=Count(
+                    'tasks',
+                    filter=Q(tasks__status__isnull=True) | ~Q(tasks__status='cancelled'),
+                    distinct=True,
+                ),
                 annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
                 annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
             ).get(
@@ -59,7 +63,11 @@ class WorkspaceLookupMixin:
                 return Workspace.objects.select_related('post', 'post__user').prefetch_related(
                     'milestones', 'memberships__user'
                 ).annotate(
-                    annotated_tasks_count=Count('tasks', distinct=True),
+                    annotated_tasks_count=Count(
+                        'tasks',
+                        filter=Q(tasks__status__isnull=True) | ~Q(tasks__status='cancelled'),
+                        distinct=True,
+                    ),
                     annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
                     annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
                 ).get(id=workspace.id)
@@ -81,7 +89,11 @@ class MyWorkspacesListView(APIView):
         ).distinct().select_related('post', 'post__user').prefetch_related(
             'milestones', 'memberships__user'
         ).annotate(
-            annotated_tasks_count=Count('tasks', distinct=True),
+            annotated_tasks_count=Count(
+                'tasks',
+                filter=Q(tasks__status__isnull=True) | ~Q(tasks__status='cancelled'),
+                distinct=True,
+            ),
             annotated_completed_tasks=Count('tasks', filter=Q(tasks__status='completed'), distinct=True),
             annotated_active_members=Count('memberships', filter=Q(memberships__status='active'), distinct=True),
         ).order_by('-updated_at')
@@ -424,7 +436,13 @@ class ProjectTaskListCreateView(WorkspaceLookupMixin, APIView):
 
     def get(self, request, workspace_id):
         workspace = self.get_workspace()
-        qs = workspace.tasks.select_related('creator', 'assignee', 'reviewer', 'milestone').prefetch_related('deliverables', 'deliverables__reviews')
+        qs = workspace.tasks.select_related(
+            'creator', 'assignee', 'reviewer', 'milestone'
+        ).prefetch_related(
+            Prefetch('deliverables', queryset=TaskDeliverable.objects.select_related('submitted_by')),
+            Prefetch('deliverables__reviews', queryset=TaskReview.objects.select_related('reviewer')),
+        )
+
         
         # Filters
         task_status = request.query_params.get('status')

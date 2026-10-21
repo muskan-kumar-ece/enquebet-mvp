@@ -23,7 +23,10 @@ interface WebSocketContextType {
     onChatRead: (handler: (data: any) => void) => () => void;
     /** Connect chat WS to a specific conversation */
     connectChat: (conversationId: string) => void;
+    /** Disconnect active chat WS */
+    disconnectChat: () => void;
     /** Send a chat message to the currently connected conversation */
+
     sendChatMessage: (content: string, attachment_url?: string, client_msg_id?: string) => void;
     /** Broadcast typing indicator */
     sendChatTyping: (isTyping: boolean) => void;
@@ -138,9 +141,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
+    const chatHandlers = useRef<Map<string, Set<(data: any) => void>>>(new Map());
+
     const connectChat = useCallback((conversationId: string) => {
         if (isWebSocketDisabled()) return;
-        if (currentConvoId.current === conversationId && chatWS.current?.isConnected) return;
+        if (currentConvoId.current === conversationId && chatWS.current) return;
 
         chatWS.current?.disconnect();
         currentConvoId.current = conversationId;
@@ -148,23 +153,45 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         const chatUrlBuilder = () => resolveSecureWsUrl(`ws/chat/${conversationId}/`);
         const ws = new WebSocketManager('', chatUrlBuilder);
         chatWS.current = ws;
+
+        // Re-attach all registered chat listeners to the new connection
+        chatHandlers.current.forEach((handlers, event) => {
+            handlers.forEach((handler) => ws.on(event, handler));
+        });
+
         ws.connect();
     }, []);
 
-    const onChatMessage = useCallback((handler: (data: any) => void) => {
-        if (!chatWS.current) return () => { };
-        return chatWS.current.on('chat_message', handler);
+    const disconnectChat = useCallback(() => {
+        chatWS.current?.disconnect();
+        chatWS.current = null;
+        currentConvoId.current = null;
     }, []);
+
+    const _addChatListener = useCallback((event: string, handler: (data: any) => void) => {
+        if (!chatHandlers.current.has(event)) {
+            chatHandlers.current.set(event, new Set());
+        }
+        chatHandlers.current.get(event)!.add(handler);
+        const unbindCurrent = chatWS.current ? chatWS.current.on(event, handler) : () => { };
+
+        return () => {
+            chatHandlers.current.get(event)?.delete(handler);
+            unbindCurrent();
+        };
+    }, []);
+
+    const onChatMessage = useCallback((handler: (data: any) => void) => {
+        return _addChatListener('chat_message', handler);
+    }, [_addChatListener]);
 
     const onChatTyping = useCallback((handler: (data: any) => void) => {
-        if (!chatWS.current) return () => { };
-        return chatWS.current.on('chat_typing', handler);
-    }, []);
+        return _addChatListener('chat_typing', handler);
+    }, [_addChatListener]);
 
     const onChatRead = useCallback((handler: (data: any) => void) => {
-        if (!chatWS.current) return () => { };
-        return chatWS.current.on('chat_read', handler);
-    }, []);
+        return _addChatListener('chat_read', handler);
+    }, [_addChatListener]);
 
     const sendChatMessage = useCallback((content: string, attachment_url?: string, client_msg_id?: string) => {
         chatWS.current?.send({ content, attachment_url, client_msg_id });
@@ -177,6 +204,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     const sendChatRead = useCallback(() => {
         chatWS.current?.send({ type: 'read' });
     }, []);
+
 
     const clearUnread = useCallback(async () => {
         setUnreadCount(0);
@@ -196,7 +224,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                 onChatTyping,
                 onChatRead,
                 connectChat,
+                disconnectChat,
                 sendChatMessage,
+
                 sendChatTyping,
                 sendChatRead,
                 unreadCount,

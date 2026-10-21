@@ -412,8 +412,18 @@ class NotificationService:
         outbox_id = str(outbox_entry.id)
         user_id = str(recipient.id)
 
-        transaction.on_commit(lambda: OutboxProcessor.deliver_entry(outbox_id))
-        transaction.on_commit(lambda: OutboxProcessor.broadcast_unread_count(user_id))
+        def _dispatch_delivery():
+            try:
+                from .tasks import deliver_outbox_entry_task
+                deliver_outbox_entry_task.delay(outbox_id, user_id)
+            except Exception as e:
+                logger.warning(
+                    f"Celery dispatch failed for outbox {outbox_id}, falling back to direct delivery: {e}"
+                )
+                OutboxProcessor.deliver_entry(outbox_id)
+                OutboxProcessor.broadcast_unread_count(user_id)
+
+        transaction.on_commit(_dispatch_delivery)
 
 
 class OutboxProcessor:

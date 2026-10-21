@@ -125,11 +125,28 @@ export interface WorkspaceProof {
     peer_reviews?: PeerReviewDetail[];
 }
 
-export interface WorkspaceDetail {
+export interface WorkspacePostMetadata {
     id: string;
     title: string;
     description: string;
-    post_id: string;
+    category?: string;
+    view_type?: string;
+    location?: string;
+    college?: string;
+    city?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    is_remote?: boolean;
+    created_at?: string;
+    user?: WorkspaceUserSummary;
+}
+
+export interface WorkspaceDetail {
+    id: string;
+    post?: WorkspacePostMetadata;
+    title?: string;
+    description?: string;
+    post_id?: string;
     status: WorkspaceStatus;
     current_user_role: WorkspaceRole;
     repo_url?: string;
@@ -137,11 +154,13 @@ export interface WorkspaceDetail {
     documentation_url?: string;
     max_members: number;
     active_members_count: number;
-    total_tasks_count: number;
+    total_tasks_count?: number;
+    tasks_count?: number;
     completed_tasks_count: number;
     progress_percentage: number;
     created_at: string;
     updated_at: string;
 }
+
 
 export type WorkspaceErrorType = '403' | '404' | 'network' | null;

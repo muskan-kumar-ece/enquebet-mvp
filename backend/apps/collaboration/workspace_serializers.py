@@ -2,16 +2,51 @@
 Serializers for Workspace, Team Governance, Kanban Tasks, Deliverables, and Proof of Work.
 """
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import (
     Workspace, TeamMembership, ProjectMilestone, ProjectTask,
     TaskDeliverable, TaskReview, ProofOfWork, PeerReview, ProjectActivity
 )
-from apps.users.serializers import UserSerializer
-from apps.posts.serializers import PostSerializer
+from apps.posts.models import Post
+
+User = get_user_model()
+
+
+class WorkspaceUserSummarySerializer(serializers.ModelSerializer):
+    """Focused user summary for workspace execution and team lists."""
+    avatar_url = serializers.URLField(source='profile_image', required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'full_name', 'profile_image', 'avatar_url',
+            'headline', 'reputation_score'
+        ]
+        read_only_fields = ['id', 'username', 'full_name', 'profile_image', 'avatar_url', 'headline', 'reputation_score']
+
+
+
+class WorkspacePostSerializer(serializers.ModelSerializer):
+    """
+    Project metadata serializer specifically for workspace execution.
+    Excludes public social feed discovery metrics (likes, comments, saved status, distance)
+    which belong strictly to public feed discovery (/posts/).
+    """
+    user = WorkspaceUserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Post
+        fields = [
+            'id', 'user', 'title', 'description', 'category', 'view_type',
+            'location', 'college', 'city', 'latitude', 'longitude', 'is_remote',
+            'created_at',
+        ]
+        read_only_fields = fields
 
 
 class TeamMembershipSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
+    user = WorkspaceUserSummarySerializer(read_only=True)
+
     
     class Meta:
         model = TeamMembership
@@ -23,7 +58,7 @@ class TeamMembershipSerializer(serializers.ModelSerializer):
 
 
 class ProjectActivitySerializer(serializers.ModelSerializer):
-    actor = UserSerializer(read_only=True)
+    actor = WorkspaceUserSummarySerializer(read_only=True)
 
     class Meta:
         model = ProjectActivity
@@ -42,7 +77,7 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
 
 
 class TaskReviewSerializer(serializers.ModelSerializer):
-    reviewer = UserSerializer(read_only=True)
+    reviewer = WorkspaceUserSummarySerializer(read_only=True)
 
     class Meta:
         model = TaskReview
@@ -51,7 +86,7 @@ class TaskReviewSerializer(serializers.ModelSerializer):
 
 
 class TaskDeliverableSerializer(serializers.ModelSerializer):
-    submitted_by = UserSerializer(read_only=True)
+    submitted_by = WorkspaceUserSummarySerializer(read_only=True)
     reviews = TaskReviewSerializer(many=True, read_only=True)
 
     class Meta:
@@ -64,9 +99,9 @@ class TaskDeliverableSerializer(serializers.ModelSerializer):
 
 
 class ProjectTaskSerializer(serializers.ModelSerializer):
-    creator = UserSerializer(read_only=True)
-    assignee = UserSerializer(read_only=True)
-    reviewer = UserSerializer(read_only=True)
+    creator = WorkspaceUserSummarySerializer(read_only=True)
+    assignee = WorkspaceUserSummarySerializer(read_only=True)
+    reviewer = WorkspaceUserSummarySerializer(read_only=True)
     assignee_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
     reviewer_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
     milestone_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
@@ -92,7 +127,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
 
 
 class WorkspaceDetailSerializer(serializers.ModelSerializer):
-    post = PostSerializer(read_only=True)
+    post = WorkspacePostSerializer(read_only=True)
     active_members_count = serializers.SerializerMethodField()
     tasks_count = serializers.SerializerMethodField()
     completed_tasks_count = serializers.SerializerMethodField()
@@ -111,6 +146,8 @@ class WorkspaceDetailSerializer(serializers.ModelSerializer):
     def get_active_members_count(self, obj):
         if hasattr(obj, 'annotated_active_members') and obj.annotated_active_members is not None:
             return obj.annotated_active_members
+        if hasattr(obj, '_prefetched_objects_cache') and 'memberships' in obj._prefetched_objects_cache:
+            return sum(1 for m in obj.memberships.all() if m.status == 'active')
         return obj.memberships.filter(status='active').count()
 
     def get_tasks_count(self, obj):
@@ -127,15 +164,21 @@ class WorkspaceDetailSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not (request and request.user.is_authenticated):
             return None
-        if obj.post.user == request.user:
+        if obj.post.user_id == request.user.id:
             return 'owner'
+        if hasattr(obj, '_prefetched_objects_cache') and 'memberships' in obj._prefetched_objects_cache:
+            for m in obj.memberships.all():
+                if m.user_id == request.user.id and m.status == 'active':
+                    return m.role
+            return None
         membership = obj.memberships.filter(user=request.user, status='active').first()
         return membership.role if membership else None
 
 
 class PeerReviewSerializer(serializers.ModelSerializer):
-    reviewer = UserSerializer(read_only=True)
-    reviewee = UserSerializer(read_only=True)
+    reviewer = WorkspaceUserSummarySerializer(read_only=True)
+    reviewee = WorkspaceUserSummarySerializer(read_only=True)
+
 
     class Meta:
         model = PeerReview

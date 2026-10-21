@@ -25,11 +25,14 @@ export default function FeedTabs({ activeTab, onTabChange }: FeedTabsProps) {
                     return (
                         <button
                             key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={isActive}
                             onClick={() => onTabChange(tab.id)}
-                            className={`flex items-center justify-center gap-1.5 flex-1 min-w-[95px] px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-150 shrink-0 ${
+                            className={`flex items-center justify-center gap-1.5 flex-1 min-w-[95px] px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-150 shrink-0 select-none touch-manipulation active:scale-[0.96] ${
                                 isActive
                                     ? 'bg-[#1864ff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_2px_6px_rgba(0,0,0,0.4)] font-semibold border border-[#488eff]/50'
-                                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] border border-transparent'
+                                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] active:bg-white/[0.08] border border-transparent'
                             }`}
                         >
                             <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-zinc-400'}`} />

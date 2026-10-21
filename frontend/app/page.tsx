@@ -254,9 +254,10 @@ export default function HomePage() {
               </span>
             </div>
             <button
+              type="button"
               onClick={handleDetectOrSyncLocation}
               disabled={syncingLocation}
-              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors px-2.5 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-zinc-800 shrink-0 ml-2 font-mono disabled:opacity-50"
+              className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1.5 transition-all px-2.5 py-1 rounded-lg hover:bg-white/[0.05] active:bg-white/[0.08] active:scale-95 border border-transparent hover:border-zinc-800 shrink-0 ml-2 font-mono disabled:opacity-50 select-none touch-manipulation cursor-pointer"
               title="Refresh GPS Location"
             >
               {syncingLocation ? (
@@ -274,6 +275,7 @@ export default function HomePage() {
               <span className="truncate text-xs">Prioritize collegiate & regional builder ventures</span>
             </div>
             <button
+              type="button"
               onClick={handleDetectOrSyncLocation}
               disabled={syncingLocation}
               className="btn-primary text-[11px] px-3 py-1 shrink-0 font-medium ml-2 flex items-center gap-1.5 disabled:opacity-50"
@@ -343,11 +345,15 @@ export default function HomePage() {
           {nextPage && (
             <div className="flex justify-center pt-4">
               <button
+                type="button"
                 onClick={() => fetchPosts(activeTab, currentPage + 1, true)}
                 disabled={loadingMore}
-                className="btn-outline px-8 py-2.5 text-xs font-semibold"
+                data-loading={loadingMore}
+                aria-busy={loadingMore}
+                className="btn-outline px-8 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 select-none touch-manipulation"
               >
-                {loadingMore ? 'Loading More...' : 'Load More Posts'}
+                {loadingMore && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-white" />}
+                <span>{loadingMore ? 'Loading More Posts...' : 'Load More Posts'}</span>
               </button>
             </div>
           )}

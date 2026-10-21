@@ -110,7 +110,7 @@ export default function PostMediaGallery({
     return (
         <>
             <div 
-                className={`relative group/gallery mt-2 mb-4 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-md ${className}`}
+                className={`relative group/gallery mt-2 mb-4 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-md touch-pan-y ${className}`}
                 role="region"
                 aria-roledescription="carousel"
                 aria-label="Post media carousel"
@@ -151,10 +151,18 @@ export default function PostMediaGallery({
                 {/* Swipeable Carousel Track */}
                 <div
                     ref={carouselRef}
-                    onScroll={handleScroll}
+                    onScroll={count > 1 ? handleScroll : undefined}
                     onClick={handleTapOrClick}
-                    className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth scrollbar-none touch-pan-x cursor-pointer select-none"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    className={`flex ${
+                        count > 1
+                            ? 'overflow-x-auto snap-x snap-mandatory scroll-smooth'
+                            : 'overflow-hidden'
+                    } scrollbar-none cursor-pointer select-none`}
+                    style={{
+                        touchAction: count > 1 ? 'pan-x pan-y' : 'pan-y',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                    }}
                 >
                     {images.map((img, idx) => (
                         <div
@@ -162,13 +170,14 @@ export default function PostMediaGallery({
                             role="group"
                             aria-roledescription="slide"
                             aria-label={`Slide ${idx + 1} of ${count}`}
-                            className="relative min-w-full w-full aspect-[4/3] sm:aspect-[16/10] max-h-[460px] md:max-h-[520px] snap-start shrink-0 flex items-center justify-center overflow-hidden bg-slate-950"
+                            className="relative min-w-full w-full aspect-[4/3] sm:aspect-[16/10] max-h-[460px] md:max-h-[520px] snap-start shrink-0 flex items-center justify-center overflow-hidden bg-slate-950 touch-pan-y"
                         >
                             {/* Blurred Backdrop Layer (Ensures no blank gaps and beautiful atmospheric fill) */}
                             <img
                                 src={img}
                                 alt=""
                                 aria-hidden="true"
+                                draggable={false}
                                 className="absolute inset-0 w-full h-full object-cover filter blur-xl scale-110 opacity-30 pointer-events-none select-none"
                                 loading={idx === 0 ? "eager" : "lazy"}
                             />
@@ -177,6 +186,7 @@ export default function PostMediaGallery({
                             <img
                                 src={img}
                                 alt={`${altTitle} - ${idx + 1} of ${count}`}
+                                draggable={false}
                                 className="relative z-10 max-h-full max-w-full object-contain pointer-events-none select-none transition-transform duration-300"
                                 loading={idx === 0 ? "eager" : "lazy"}
                             />

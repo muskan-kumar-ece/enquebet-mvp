@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { 
     X, AlertTriangle, 
     FileText, Send, GitPullRequest, ExternalLink, ShieldCheck,
-    User, Calendar, Check
+    User, Calendar, Check, Loader2
 } from 'lucide-react';
 import { PRIORITY_BADGES, TASK_STATUS_COLUMNS } from './KanbanBoard';
 
@@ -101,8 +101,10 @@ export function TaskDetailDrawer({
                     </div>
 
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-lg bg-surface hover:bg-surface-hover text-text-secondary hover:text-white transition-colors"
+                        aria-label="Close task details"
+                        className="p-1.5 rounded-lg bg-surface hover:bg-surface-hover active:scale-90 text-text-secondary hover:text-white transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -218,10 +220,11 @@ export function TaskDetailDrawer({
                                 <button
                                     type="submit"
                                     disabled={submittingDeliverable}
-                                    className="btn-brand w-full py-2 text-xs font-semibold rounded-lg disabled:opacity-50 text-white flex items-center justify-center gap-1.5 transition-all"
+                                    aria-busy={submittingDeliverable}
+                                    className="btn-brand w-full py-2 text-xs font-semibold rounded-lg disabled:opacity-50 text-white flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-brand"
                                 >
-                                    <Send className="w-3.5 h-3.5" />
-                                    <span>{submittingDeliverable ? 'Submitting...' : 'Submit Deliverable for Review'}</span>
+                                    {submittingDeliverable ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                    <span>{submittingDeliverable ? 'Submitting Deliverable...' : 'Submit Deliverable for Review'}</span>
                                 </button>
                             </form>
                         </div>
@@ -355,7 +358,7 @@ export function TaskDetailDrawer({
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setActiveDeliverableReviewId(null)}
-                                                                    className="text-text-secondary hover:text-white text-xs"
+                                                                    className="text-text-secondary hover:text-white text-xs active:scale-95 transition-all touch-manipulation p-1"
                                                                 >
                                                                     Cancel
                                                                 </button>
@@ -367,7 +370,7 @@ export function TaskDetailDrawer({
                                                                         key={v}
                                                                         type="button"
                                                                         onClick={() => setReviewVerdict(v)}
-                                                                        className={`py-1.5 px-2 text-[11px] font-semibold rounded-md border text-center transition-all ${
+                                                                        className={`py-1.5 px-2 text-[11px] font-semibold rounded-md border text-center transition-all active:scale-95 touch-manipulation ${
                                                                             reviewVerdict === v
                                                                                 ? v === 'approved' 
                                                                                     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-sm'
@@ -395,13 +398,14 @@ export function TaskDetailDrawer({
                                                             <button
                                                                 type="button"
                                                                 disabled={submittingReview}
+                                                                aria-busy={submittingReview}
                                                                 onClick={() => {
                                                                     onReviewDeliverable(deliv.id);
                                                                     setActiveDeliverableReviewId(null);
                                                                 }}
-                                                                className="btn-brand w-full py-2 text-xs font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all"
+                                                                className="btn-brand w-full py-2 text-xs font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-brand"
                                                             >
-                                                                <Check className="w-3.5 h-3.5" />
+                                                                {submittingReview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                                                 <span>{submittingReview ? 'Submitting Verdict...' : `Submit Verdict (${reviewVerdict.replace('_', ' ')})`}</span>
                                                             </button>
                                                         </div>
@@ -412,7 +416,7 @@ export function TaskDetailDrawer({
                                                                 setActiveDeliverableReviewId(deliv.id);
                                                                 setReviewVerdict('approved');
                                                             }}
-                                                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand/10 hover:bg-brand/20 text-brand-light border border-brand/20 flex items-center gap-1.5 transition-colors"
+                                                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand/10 hover:bg-brand/20 active:scale-95 text-brand-light border border-brand/20 flex items-center gap-1.5 transition-all touch-manipulation"
                                                         >
                                                             <ShieldCheck className="w-3.5 h-3.5" />
                                                             <span>Review this Deliverable</span>

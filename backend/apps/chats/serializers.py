@@ -31,13 +31,20 @@ class ConversationSerializer(serializers.ModelSerializer):
         ]
 
     def get_members(self, obj):
-        member_objs = obj.members.select_related('user').all()[:10]
+        if hasattr(obj, '_prefetched_objects_cache') and 'members' in obj._prefetched_objects_cache:
+            member_objs = list(obj.members.all())[:10]
+        else:
+            member_objs = list(obj.members.select_related('user').all()[:10])
         return [{'id': str(m.user.id), 'username': m.user.username, 'full_name': m.user.full_name} for m in member_objs]
 
     def get_member_count(self, obj):
+        if hasattr(obj, '_prefetched_objects_cache') and 'members' in obj._prefetched_objects_cache:
+            return len(obj.members.all())
         return obj.members.count()
 
     def get_project_title(self, obj):
+        if hasattr(obj, 'annotated_project_title') and obj.annotated_project_title is not None:
+            return obj.annotated_project_title
         if not obj.project_id:
             return None
         from apps.posts.models import Post
@@ -45,6 +52,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         return post.title if post else None
 
     def get_workspace_id(self, obj):
+        if hasattr(obj, 'annotated_workspace_id') and obj.annotated_workspace_id is not None:
+            return str(obj.annotated_workspace_id)
         if not obj.project_id:
             return None
         from apps.collaboration.models import Workspace
@@ -52,6 +61,12 @@ class ConversationSerializer(serializers.ModelSerializer):
         return str(ws.id) if ws else None
 
     def get_last_message(self, obj):
+        if hasattr(obj, 'last_message_content') and obj.last_message_content is not None:
+            return {
+                'content': obj.last_message_content,
+                'sender': obj.last_message_sender_username or 'Unknown',
+                'created_at': obj.last_message_created_at
+            }
         # Use prefetched _last_message if available, otherwise query
         if hasattr(obj, '_last_message') and obj._last_message:
             msg = obj._last_message
@@ -70,11 +85,22 @@ class ConversationSerializer(serializers.ModelSerializer):
         return None
 
     def get_unread_count(self, obj):
+        if hasattr(obj, 'annotated_unread_count') and obj.annotated_unread_count is not None:
+            return obj.annotated_unread_count
+
         request = self.context.get('request')
         if not request or not getattr(request, 'user', None) or request.user.is_anonymous:
             return 0
 
-        member = ConversationMember.objects.filter(conversation=obj, user=request.user).only('last_read_at').first()
+        # Try to find member from prefetched cache first
+        member = None
+        if hasattr(obj, '_prefetched_objects_cache') and 'members' in obj._prefetched_objects_cache:
+            for m in obj.members.all():
+                if m.user_id == request.user.id:
+                    member = m
+                    break
+        if not member:
+            member = ConversationMember.objects.filter(conversation=obj, user=request.user).only('last_read_at').first()
         if not member:
             return 0
 
@@ -82,6 +108,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         if member.last_read_at:
             qs = qs.filter(created_at__gt=member.last_read_at)
         return qs.count()
+
 
 
 class MessageSerializer(serializers.ModelSerializer):

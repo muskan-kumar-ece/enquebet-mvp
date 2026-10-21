@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -26,6 +26,24 @@ export function SocialAuthButtons({ disabled, onActionStart, onActionEnd }: Soci
 
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || '';
+
+    const handleGoogleCredentialResponse = useCallback(async (response: any) => {
+        if (!response?.credential) return;
+
+        setLoadingProvider('google');
+        if (onActionStart) onActionStart();
+
+        try {
+            const result = await api.loginWithGoogle(response.credential);
+            setAuthSession(result);
+            toast.success(result.created ? 'Welcome to ENQUEbet! Profile forged.' : 'Welcome back, Builder!');
+            router.push('/');
+        } catch (err: any) {
+            toast.error(err.message || 'Google authentication failed');
+            setLoadingProvider(null);
+            if (onActionEnd) onActionEnd();
+        }
+    }, [onActionStart, onActionEnd, router, setAuthSession]);
 
     // Initialize Google One Tap / Button if client ID is configured
     useEffect(() => {
@@ -57,25 +75,7 @@ export function SocialAuthButtons({ disabled, onActionStart, onActionEnd }: Soci
                 cancel_on_tap_outside: true,
             });
         }
-    }, [googleClientId]);
-
-    const handleGoogleCredentialResponse = async (response: any) => {
-        if (!response?.credential) return;
-
-        setLoadingProvider('google');
-        if (onActionStart) onActionStart();
-
-        try {
-            const result = await api.loginWithGoogle(response.credential);
-            setAuthSession(result);
-            toast.success(result.created ? 'Welcome to ENQUEbet! Profile forged.' : 'Welcome back, Builder!');
-            router.push('/');
-        } catch (err: any) {
-            toast.error(err.message || 'Google authentication failed');
-            setLoadingProvider(null);
-            if (onActionEnd) onActionEnd();
-        }
-    };
+    }, [googleClientId, handleGoogleCredentialResponse]);
 
     const handleGoogleClick = () => {
         if (!googleClientId) {
@@ -132,7 +132,7 @@ export function SocialAuthButtons({ disabled, onActionStart, onActionEnd }: Soci
                     onClick={handleGoogleClick}
                     disabled={isBusy}
                     aria-label="Continue with Google"
-                    className="relative flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#0c0f1b] hover:bg-[#121629] border border-[#1e263c] hover:border-[#2d3856] text-slate-200 hover:text-white text-xs font-semibold tracking-wide transition-all duration-200 shadow-lg shadow-black/40 hover:shadow-brand-primary/10 group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="relative flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#0c0f1b] hover:bg-[#121629] active:bg-[#161c33] active:scale-[0.97] border border-[#1e263c] hover:border-[#2d3856] text-slate-200 hover:text-white text-xs font-semibold tracking-wide transition-all duration-150 shadow-lg shadow-black/40 hover:shadow-brand-primary/10 group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation"
                 >
                     {loadingProvider === 'google' ? (
                         <Loader2 className="w-4 h-4 animate-spin text-[#1864ff]" />
@@ -165,7 +165,7 @@ export function SocialAuthButtons({ disabled, onActionStart, onActionEnd }: Soci
                     onClick={handleGithubClick}
                     disabled={isBusy}
                     aria-label="Continue with GitHub"
-                    className="relative flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#0c0f1b] hover:bg-[#121629] border border-[#1e263c] hover:border-[#2d3856] text-slate-200 hover:text-white text-xs font-semibold tracking-wide transition-all duration-200 shadow-lg shadow-black/40 hover:shadow-brand-primary/10 group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="relative flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#0c0f1b] hover:bg-[#121629] active:bg-[#161c33] active:scale-[0.97] border border-[#1e263c] hover:border-[#2d3856] text-slate-200 hover:text-white text-xs font-semibold tracking-wide transition-all duration-150 shadow-lg shadow-black/40 hover:shadow-brand-primary/10 group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation"
                 >
                     {loadingProvider === 'github' ? (
                         <Loader2 className="w-4 h-4 animate-spin text-[#1864ff]" />

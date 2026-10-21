@@ -27,13 +27,13 @@ export function ChatHeader({
     const memberCount = convo.member_count ?? convo.members?.length ?? 2;
 
     return (
-        <div className="h-16 px-4 md:px-6 bg-[#0b0d14] border-b border-[#1e2335] flex items-center justify-between shrink-0">
+        <div className="h-14 md:h-16 px-3 md:px-6 bg-[#0b0d14] border-b border-[#1e2335] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 min-w-0">
                 {/* Mobile Back Button */}
                 {onBack && (
                     <button
                         onClick={onBack}
-                        className="md:hidden p-1.5 -ml-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+                        className="md:hidden p-2 -ml-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 active:scale-95 transition-all select-none touch-manipulation cursor-pointer"
                         aria-label="Back to conversations"
                     >
                         <ArrowLeft className="w-5 h-5" />
@@ -41,33 +41,76 @@ export function ChatHeader({
                 )}
 
                 {/* Avatar / Channel Glyph */}
-                <div className="relative shrink-0">
-                    {convo.is_group ? (
-                        <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/30 flex items-center justify-center text-brand font-bold">
-                            <Hash className="w-5 h-5" />
-                        </div>
-                    ) : otherMember?.profile_image ? (
-                        <img
-                            src={otherMember.profile_image}
-                            alt={title}
-                            className="w-10 h-10 rounded-full object-cover border border-zinc-700/60"
-                        />
-                    ) : (
-                        <div className="w-10 h-10 rounded-full bg-[#14192b] text-brand-light font-bold text-xs flex items-center justify-center border border-brand/20">
-                            {title.slice(0, 2).toUpperCase()}
-                        </div>
-                    )}
-                    {!convo.is_group && (
+                {otherMember?.id && !convo.is_group ? (
+                    <Link
+                        href={`/profile/${otherMember.id}`}
+                        className="relative shrink-0 block group cursor-pointer"
+                        title={`View @${otherMember.username || otherMember.full_name}'s profile`}
+                    >
+                        {otherMember?.profile_image ? (
+                            <img
+                                src={otherMember.profile_image}
+                                alt={title}
+                                className="w-10 h-10 rounded-full object-cover border border-zinc-700/60 group-hover:border-brand/60 transition-colors"
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-[#14192b] text-brand-light font-bold text-xs flex items-center justify-center border border-brand/20 group-hover:border-brand/50 transition-colors">
+                                {title.slice(0, 2).toUpperCase()}
+                            </div>
+                        )}
                         <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0b0d14]" />
-                    )}
-                </div>
+                    </Link>
+                ) : (
+                    <div className="relative shrink-0">
+                        {convo.is_group ? (
+                            <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/30 flex items-center justify-center text-brand font-bold">
+                                <Hash className="w-5 h-5" />
+                            </div>
+                        ) : otherMember?.profile_image ? (
+                            <img
+                                src={otherMember.profile_image}
+                                alt={title}
+                                className="w-10 h-10 rounded-full object-cover border border-zinc-700/60"
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-[#14192b] text-brand-light font-bold text-xs flex items-center justify-center border border-brand/20">
+                                {title.slice(0, 2).toUpperCase()}
+                            </div>
+                        )}
+                        {!convo.is_group && (
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#0b0d14]" />
+                        )}
+                    </div>
+                )}
 
                 {/* Title and Status */}
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h2 className="text-sm md:text-base font-bold text-white truncate max-w-[200px] sm:max-w-xs md:max-w-md">
-                            {title}
-                        </h2>
+                        {otherMember?.id && !convo.is_group ? (
+                            <Link
+                                href={`/profile/${otherMember.id}`}
+                                className="hover:underline hover:text-brand-light transition-colors group flex items-center"
+                                title={`View @${otherMember.username || otherMember.full_name}'s profile`}
+                            >
+                                <h2 className="text-sm md:text-base font-bold text-white group-hover:text-brand-light truncate max-w-[200px] sm:max-w-xs md:max-w-md transition-colors">
+                                    {title}
+                                </h2>
+                            </Link>
+                        ) : convo.project_id ? (
+                            <Link
+                                href={`/workspace/${workspaceId || convo.project_id}`}
+                                className="hover:underline hover:text-brand-light transition-colors group"
+                                title="Open Project Workspace"
+                            >
+                                <h2 className="text-sm md:text-base font-bold text-white group-hover:text-brand-light truncate max-w-[200px] sm:max-w-xs md:max-w-md transition-colors">
+                                    {title}
+                                </h2>
+                            </Link>
+                        ) : (
+                            <h2 className="text-sm md:text-base font-bold text-white truncate max-w-[200px] sm:max-w-xs md:max-w-md">
+                                {title}
+                            </h2>
+                        )}
                         {convo.is_group && (
                             <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium text-brand-light bg-brand/10 px-2 py-0.5 rounded-full border border-brand/20">
                                 <Sparkles className="w-2.5 h-2.5" />

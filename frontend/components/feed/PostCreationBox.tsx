@@ -32,14 +32,15 @@ export default function PostCreationBox({ onPostCreated }: PostCreationBoxProps)
                 </div>
                 <div className="flex-1">
                     <button
+                        type="button"
                         onClick={handleCreateClick}
-                        className="w-full text-left bg-[#141724] border border-[#23283c] hover:border-[#1864ff]/60 px-4 py-2.5 rounded-xl transition-all group flex items-center justify-between"
+                        className="w-full text-left bg-[#141724] border border-[#23283c] hover:border-[#1864ff]/60 active:border-[#1864ff] active:scale-[0.99] active:bg-[#181b2a] px-4 py-2.5 rounded-xl transition-all duration-150 group flex items-center justify-between touch-manipulation select-none cursor-pointer"
                     >
                         <span className="flex items-center gap-2 text-zinc-400 text-xs sm:text-sm">
                             <Sparkles className="w-4 h-4 text-[#4f8fff] transition-colors" />
                             What are you building next? Share a project, idea, or role...
                         </span>
-                        <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-medium text-zinc-400 bg-[#0c0e17] border border-zinc-800 rounded">
+                        <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-medium text-zinc-400 bg-[#0c0e17] border border-zinc-800 rounded group-hover:text-white group-active:text-[#1864ff] transition-colors">
                             New +
                         </span>
                     </button>
@@ -49,22 +50,25 @@ export default function PostCreationBox({ onPostCreated }: PostCreationBoxProps)
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#1a1f30]">
                 <div className="flex items-center gap-1.5">
                     <button
+                        type="button"
                         onClick={() => router.push('/create?media=image')}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent hover:border-zinc-800 transition-all flex items-center gap-1.5"
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] active:scale-95 border border-transparent hover:border-zinc-800 transition-all duration-150 flex items-center gap-1.5 select-none touch-manipulation cursor-pointer"
                     >
                         <ImageIcon className="w-3.5 h-3.5 text-[#4f8fff]" />
                         <span>Screenshot</span>
                     </button>
                     <button
+                        type="button"
                         onClick={() => router.push('/create?media=video')}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent hover:border-zinc-800 transition-all flex items-center gap-1.5"
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] active:scale-95 border border-transparent hover:border-zinc-800 transition-all duration-150 flex items-center gap-1.5 select-none touch-manipulation cursor-pointer"
                     >
                         <Video className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Demo Clip</span>
                     </button>
                     <button
+                        type="button"
                         onClick={() => router.push('/create?media=document')}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent hover:border-zinc-800 transition-all flex items-center gap-1.5"
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] active:scale-95 border border-transparent hover:border-zinc-800 transition-all duration-150 flex items-center gap-1.5 select-none touch-manipulation cursor-pointer"
                     >
                         <FileText className="w-3.5 h-3.5 text-amber-400" />
                         <span>Spec Doc</span>
@@ -72,6 +76,7 @@ export default function PostCreationBox({ onPostCreated }: PostCreationBoxProps)
                 </div>
 
                 <button
+                    type="button"
                     onClick={handleCreateClick}
                     className="btn-primary text-xs px-3.5 py-1.5 font-semibold"
                 >

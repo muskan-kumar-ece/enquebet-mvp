@@ -91,8 +91,9 @@ export function KanbanBoard({
                     </span>
                 </div>
                 <button
+                    type="button"
                     onClick={onOpenCreateTask}
-                    className="btn-brand px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-sm"
+                    className="btn-brand px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-sm active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-brand"
                 >
                     <Plus className="w-3.5 h-3.5" />
                     <span>New Task</span>
@@ -129,9 +130,11 @@ export function KanbanBoard({
                                 </div>
                                 {col.key === 'backlog' && (
                                     <button
+                                        type="button"
                                         onClick={onOpenCreateTask}
-                                        className="text-text-secondary hover:text-text p-1 hover:bg-surface rounded transition-colors"
+                                        className="text-text-secondary hover:text-text p-1 hover:bg-surface rounded transition-all active:scale-90 touch-manipulation"
                                         title="Add task to Backlog"
+                                        aria-label="Add task to Backlog"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
@@ -153,7 +156,7 @@ export function KanbanBoard({
                                             onDragStart={(e) => handleDragStart(e, task.id)}
                                             onDragEnd={() => setDraggedTaskId(null)}
                                             onClick={() => onSelectTask(task)}
-                                            className={`group p-3 rounded-lg bg-[#0f111a] hover:bg-[#131726] border border-[#1e2335] hover:border-brand/40 cursor-grab active:cursor-grabbing transition-all duration-150 shadow-sm hover:shadow-md ${
+                                            className={`group p-3 rounded-lg bg-[#0f111a] hover:bg-[#131726] active:scale-[0.98] border border-[#1e2335] hover:border-brand/40 cursor-grab active:cursor-grabbing transition-all duration-150 shadow-sm hover:shadow-md touch-manipulation ${
                                                 isBeingDragged ? 'opacity-40 scale-95 border-dashed border-brand' : ''
                                             }`}
                                         >

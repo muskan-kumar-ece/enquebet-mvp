@@ -109,7 +109,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Channel Layers — use Redis in production/staging and when configured; in-memory for tests/dev fallback
-_redis_url = os.getenv('REDIS_URL') or os.getenv('UPSTASH_REDIS_URL', '')
+USE_LOCAL_MEMORY_SERVICES = os.getenv('USE_LOCAL_MEMORY_SERVICES', '').strip().lower() in ('1', 'true', 'yes')
+_redis_url = '' if USE_LOCAL_MEMORY_SERVICES else (os.getenv('REDIS_URL') or os.getenv('UPSTASH_REDIS_URL', ''))
 _is_test = 'test' in sys.argv
 
 if _is_test:
@@ -369,6 +370,25 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+    },
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or _redis_url or 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND') or _redis_url or 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_TASK_ALWAYS_EAGER = _is_test
+CELERY_TASK_EAGER_PROPAGATES = _is_test
+CELERY_BEAT_SCHEDULE = {
+    'process-pending-notification-outbox': {
+        'task': 'notifications.process_pending_outbox_batch',
+        'schedule': 60.0,
+        'kwargs': {'limit': 100},
     },
 }
 

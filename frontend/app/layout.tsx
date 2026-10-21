@@ -1,4 +1,5 @@
 import { AuthProvider } from '@/lib/contexts/AuthContext';
+import { NavigationUIProvider } from '@/lib/contexts/NavigationContext';
 import { Toaster } from 'react-hot-toast';
 import type { Metadata } from 'next';
 import { Inter, Source_Sans_3 } from 'next/font/google';
@@ -46,9 +47,11 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${sourceSans.variable}`}>
       <body>
         <AuthProvider>
-          <LayoutShell>
+          <NavigationUIProvider>
+            <LayoutShell>
             {children}
-          </LayoutShell>
+            </LayoutShell>
+          </NavigationUIProvider>
 
           {/* Toast Notifications */}
           <Toaster

@@ -220,16 +220,20 @@ export default function PostCard({
                     {/* Options Menu */}
                     <div className="relative" ref={menuRef}>
                         <button
+                            type="button"
                             onClick={handleMenuToggle}
-                            className="p-1.5 rounded-lg text-text-muted hover:bg-bg-hover hover:text-text-primary transition-all opacity-0 group-hover:opacity-100"
+                            aria-label="Post options"
+                            aria-expanded={showMenu}
+                            className="p-1.5 rounded-lg text-text-muted hover:bg-bg-hover hover:text-text-primary active:scale-90 transition-all opacity-70 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
                         >
                             <MoreVertical className="w-4 h-4" />
                         </button>
                         {showMenu && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-bg-card-elevated border border-border-light rounded-xl shadow-xl shadow-black/30 z-50 animate-scale-in overflow-hidden">
                                 <button
+                                    type="button"
                                     onClick={handleReportClick}
-                                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left hover:bg-bg-hover transition-colors text-red-400"
+                                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left hover:bg-bg-hover active:bg-red-500/10 transition-colors text-red-400"
                                 >
                                     <Flag className="w-4 h-4" />
                                     Report Post
@@ -313,38 +317,49 @@ export default function PostCard({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-5 pt-3 border-t border-border-default">
+            <div className="flex items-center gap-3 sm:gap-4 pt-3 border-t border-border-default">
                 <button
+                    type="button"
                     onClick={handleLike}
-                    className={`flex items-center gap-1.5 text-sm transition-colors ${isLiked ? 'text-red-500' : 'text-text-muted hover:text-red-500'
-                        }`}
+                    aria-label={isLiked ? `Unlike post (${likes} likes)` : `Like post (${likes} likes)`}
+                    className={`flex items-center gap-1.5 text-sm py-1 px-2 rounded-lg transition-all duration-150 active:scale-90 select-none hover:bg-white/[0.04] ${
+                        isLiked ? 'text-red-500 font-medium' : 'text-text-muted hover:text-red-500'
+                    }`}
                 >
-                    <Heart className={`w-[18px] h-[18px] ${isLiked ? 'fill-current' : ''}`} />
+                    <Heart className={`w-[18px] h-[18px] transition-transform duration-200 ${isLiked ? 'fill-current scale-110 text-red-500 animate-tactile-pop' : ''}`} />
                     <span>{likes}</span>
                 </button>
                 <Link
                     href={`/posts/${id}#comments`}
-                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary transition-colors"
+                    aria-label={`View ${comments} comments`}
+                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary py-1 px-2 rounded-lg transition-all duration-150 active:scale-90 hover:bg-white/[0.04] select-none"
                 >
                     <MessageCircle className="w-[18px] h-[18px]" />
                     <span>{comments}</span>
                 </Link>
                 <button
+                    type="button"
                     onClick={handleShare}
-                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary transition-colors"
+                    aria-label="Share post link"
+                    className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary py-1 px-2 rounded-lg transition-all duration-150 active:scale-90 hover:bg-white/[0.04] select-none"
                 >
                     <Share2 className="w-[18px] h-[18px]" />
                     <span>Share</span>
                 </button>
                 <button
+                    type="button"
                     onClick={handleSave}
-                    className={`flex items-center gap-1.5 text-sm transition-colors ${isSaved ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'}`}
+                    aria-label={isSaved ? "Remove from saved items" : "Save post to bookmarks"}
+                    className={`flex items-center gap-1.5 text-sm py-1 px-2 rounded-lg transition-all duration-150 active:scale-90 hover:bg-white/[0.04] select-none ${
+                        isSaved ? 'text-yellow-500' : 'text-text-muted hover:text-yellow-500'
+                    }`}
                 >
-                    <Bookmark className={`w-[18px] h-[18px] ${isSaved ? 'fill-current' : ''}`} />
+                    <Bookmark className={`w-[18px] h-[18px] transition-transform duration-200 ${isSaved ? 'fill-current scale-110 text-yellow-500 animate-tactile-pop' : ''}`} />
                 </button>
                 <button
+                    type="button"
                     onClick={handleBuildWith}
-                    className="flex items-center gap-1.5 text-xs text-brand-light bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/30 px-3 py-1.5 rounded-lg transition-all ml-auto font-semibold shadow-[0_0_12px_rgba(24,100,255,0.12)] hover:scale-[1.02] active:scale-[0.98]"
+                    className="flex items-center gap-1.5 text-xs text-brand-light bg-brand-primary/10 hover:bg-brand-primary/20 active:bg-brand-primary/30 border border-brand-primary/30 px-3 py-1.5 rounded-lg transition-all ml-auto font-semibold shadow-[0_0_12px_rgba(24,100,255,0.12)] hover:scale-[1.02] active:scale-[0.96] select-none"
                 >
                     <Users className="w-3.5 h-3.5 text-brand-light" />
                     <span>Build With</span>

@@ -80,6 +80,15 @@ This guide details the complete staging and production environment configuration
   cd backend && daphne -b 0.0.0.0 -p $PORT config.asgi:application
   ```
 
+### Celery Worker and Outbox Recovery Scheduler
+
+Notification delivery uses Celery and the notification outbox. Deploy these as separate Render Background Worker services, using the same backend root directory and environment variables as the web service:
+
+- **Delivery worker start command:** `celery -A config worker -l info`
+- **Outbox scheduler start command:** `celery -A config beat -l info`
+
+Run exactly one Beat scheduler for this application. It schedules the pending-outbox recovery task once per minute. Keep the worker and scheduler running alongside the Daphne web service; the `worker` and `beat` entries in `backend/Procfile` identify the commands for platforms that consume Procfiles, but Render services with explicit start commands must be configured separately.
+
 ### Required Render Environment Variables
 
 | Variable Name | Required | Example / Format | Description |

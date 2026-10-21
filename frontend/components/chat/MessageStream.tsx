@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { CheckCheck, Clock, Copy, AlertCircle, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -192,26 +193,54 @@ export function MessageStream({
                             <div className={`flex items-end gap-2.5 max-w-[85%] sm:max-w-[70%] md:max-w-[60%] ${isMe ? 'flex-row-reverse' : ''}`}>
                                 {/* Counterparty Avatar */}
                                 {!isMe && (
-                                    <div className="w-7 h-7 rounded-full bg-[#14192b] border border-brand/20 text-brand-light text-[11px] font-bold flex items-center justify-center shrink-0 mb-1">
-                                        {msg.sender?.profile_image ? (
-                                            <img
-                                                src={msg.sender.profile_image}
-                                                alt={senderName}
-                                                className="w-full h-full rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            senderInitial
-                                        )}
-                                    </div>
+                                    msg.sender?.id ? (
+                                        <Link
+                                            href={`/profile/${msg.sender.id}`}
+                                            className="w-7 h-7 rounded-full bg-[#14192b] border border-brand/20 text-brand-light text-[11px] font-bold flex items-center justify-center shrink-0 mb-1 hover:border-brand/60 hover:opacity-90 transition-all cursor-pointer"
+                                            title={`View @${msg.sender.username || senderName}'s profile`}
+                                        >
+                                            {msg.sender?.profile_image ? (
+                                                <img
+                                                    src={msg.sender.profile_image}
+                                                    alt={senderName}
+                                                    className="w-full h-full rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                senderInitial
+                                            )}
+                                        </Link>
+                                    ) : (
+                                        <div className="w-7 h-7 rounded-full bg-[#14192b] border border-brand/20 text-brand-light text-[11px] font-bold flex items-center justify-center shrink-0 mb-1">
+                                            {msg.sender?.profile_image ? (
+                                                <img
+                                                    src={msg.sender.profile_image}
+                                                    alt={senderName}
+                                                    className="w-full h-full rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                senderInitial
+                                            )}
+                                        </div>
+                                    )
                                 )}
 
                                 {/* Message Content Container */}
                                 <div className="space-y-1">
                                     {/* Sender Name in group chats */}
                                     {!isMe && (
-                                        <p className="text-[11px] font-medium text-zinc-400 ml-1">
-                                            {senderName}
-                                        </p>
+                                        msg.sender?.id ? (
+                                            <Link
+                                                href={`/profile/${msg.sender.id}`}
+                                                className="text-[11px] font-medium text-zinc-400 hover:text-brand-light hover:underline ml-1 inline-block transition-colors cursor-pointer"
+                                                title={`View @${msg.sender.username || senderName}'s profile`}
+                                            >
+                                                {senderName}
+                                            </Link>
+                                        ) : (
+                                            <p className="text-[11px] font-medium text-zinc-400 ml-1">
+                                                {senderName}
+                                            </p>
+                                        )
                                     )}
 
                                     {/* Main Bubble */}

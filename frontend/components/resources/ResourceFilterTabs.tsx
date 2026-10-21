@@ -104,8 +104,9 @@ export function ResourceFilterTabs({
                     {/* Left: Mode Segmented Switcher */}
                     <div className="flex items-center gap-1.5 p-1 rounded-lg bg-[#090a0f] border border-[#1b1e2c]">
                         <button
+                            type="button"
                             onClick={() => onTabChange('catalog')}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-brand ${
                                 activeTab === 'catalog'
                                     ? 'bg-[#181a26] text-white border border-[#2a2f45] shadow-xs'
                                     : 'text-zinc-400 hover:text-white'
@@ -117,8 +118,9 @@ export function ResourceFilterTabs({
 
                         {isAuthenticated && (
                             <button
+                                type="button"
                                 onClick={() => onTabChange('my_submissions')}
-                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-brand ${
                                     activeTab === 'my_submissions'
                                         ? 'bg-[#181a26] text-white border border-[#2a2f45] shadow-xs'
                                         : 'text-zinc-400 hover:text-white'
@@ -136,8 +138,9 @@ export function ResourceFilterTabs({
 
                         {isAdmin && (
                             <button
+                                type="button"
                                 onClick={() => onTabChange('moderation')}
-                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-amber-500 ${
                                     activeTab === 'moderation'
                                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-xs'
                                         : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10'
@@ -166,7 +169,7 @@ export function ResourceFilterTabs({
                                         setIsFormatOpen(false);
                                         setIsOrderOpen(false);
                                     }}
-                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                         activeCategory !== 'ALL'
                                             ? 'bg-blue-600/15 text-blue-300 border-blue-500/40'
                                             : 'bg-[#090a0f] text-zinc-300 border-[#1b1e2c] hover:border-[#2a2f45]'
@@ -200,7 +203,7 @@ export function ResourceFilterTabs({
                                                             onCategoryChange(cat.id);
                                                             setIsCategoryOpen(false);
                                                         }}
-                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-all active:scale-[0.98] touch-manipulation ${
                                                             isSelected
                                                                 ? 'bg-blue-600/20 text-blue-300 font-semibold'
                                                                 : 'text-zinc-300 hover:bg-[#181a26] hover:text-white'
@@ -225,7 +228,7 @@ export function ResourceFilterTabs({
                                         setIsCategoryOpen(false);
                                         setIsOrderOpen(false);
                                     }}
-                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                         activeFileType !== 'ALL'
                                             ? 'bg-blue-600/15 text-blue-300 border-blue-500/40'
                                             : 'bg-[#090a0f] text-zinc-300 border-[#1b1e2c] hover:border-[#2a2f45]'
@@ -260,7 +263,7 @@ export function ResourceFilterTabs({
                                                             onFileTypeChange(ft.id);
                                                             setIsFormatOpen(false);
                                                         }}
-                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-all active:scale-[0.98] touch-manipulation ${
                                                             isSelected
                                                                 ? 'bg-blue-600/20 text-blue-300 font-semibold'
                                                                 : 'text-zinc-300 hover:bg-[#181a26] hover:text-white'
@@ -294,7 +297,7 @@ export function ResourceFilterTabs({
                                         setIsCategoryOpen(false);
                                         setIsFormatOpen(false);
                                     }}
-                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#090a0f] border border-[#1b1e2c] hover:border-[#2a2f45] text-zinc-300 transition-colors"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#090a0f] border border-[#1b1e2c] hover:border-[#2a2f45] text-zinc-300 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-blue-500"
                                 >
                                     <ArrowUpDown className="w-3.5 h-3.5 text-zinc-500" />
                                     <span className="text-zinc-500">Sort:</span>
@@ -322,7 +325,7 @@ export function ResourceFilterTabs({
                                                             onOrderingChange(opt.value);
                                                             setIsOrderOpen(false);
                                                         }}
-                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-all active:scale-[0.98] touch-manipulation ${
                                                             isSelected
                                                                 ? 'bg-blue-600/20 text-blue-300 font-semibold'
                                                                 : 'text-zinc-300 hover:bg-[#181a26] hover:text-white'
@@ -353,9 +356,11 @@ export function ResourceFilterTabs({
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs bg-blue-500/10 text-blue-300 border border-blue-500/25">
                                 <span>{selectedCategory.label}</span>
                                 <button
+                                    type="button"
                                     onClick={() => onCategoryChange('ALL')}
-                                    className="hover:text-white"
+                                    className="hover:text-white active:scale-90 touch-manipulation p-0.5"
                                     title="Remove category filter"
+                                    aria-label="Remove category filter"
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
@@ -366,9 +371,11 @@ export function ResourceFilterTabs({
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs bg-blue-500/10 text-blue-300 border border-blue-500/25">
                                 <span>{selectedFormat.label}</span>
                                 <button
+                                    type="button"
                                     onClick={() => onFileTypeChange('ALL')}
-                                    className="hover:text-white"
+                                    className="hover:text-white active:scale-90 touch-manipulation p-0.5"
                                     title="Remove format filter"
+                                    aria-label="Remove format filter"
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
@@ -376,11 +383,12 @@ export function ResourceFilterTabs({
                         )}
 
                         <button
+                            type="button"
                             onClick={() => {
                                 onCategoryChange('ALL');
                                 onFileTypeChange('ALL');
                             }}
-                            className="text-[11px] font-mono text-zinc-500 hover:text-zinc-300 ml-1 underline decoration-zinc-700"
+                            className="text-[11px] font-mono text-zinc-500 hover:text-zinc-300 ml-1 underline decoration-zinc-700 active:scale-95 touch-manipulation"
                         >
                             Clear all
                         </button>

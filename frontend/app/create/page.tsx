@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, MapPin, Globe, GraduationCap, RefreshCw } from 'lucide-react';
+import { X, MapPin, Globe, GraduationCap, RefreshCw, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { requestUserCoordinates } from '@/lib/geo';
 import MediaUpload from '@/components/ui/MediaUpload';
@@ -280,10 +280,10 @@ export default function CreatePostPage() {
                                         type="button"
                                         onClick={handleDetectLocation}
                                         disabled={detectingLocation}
-                                        className="text-xs text-brand-light hover:text-white flex items-center gap-1 font-medium disabled:opacity-50"
+                                        className="text-xs text-brand-light hover:text-white flex items-center gap-1.5 font-medium px-2 py-1 rounded-md hover:bg-brand-primary/10 active:bg-brand-primary/20 active:scale-95 transition-all select-none touch-manipulation disabled:opacity-50"
                                     >
                                         <RefreshCw className={`w-3 h-3 ${detectingLocation ? 'animate-spin' : ''}`} />
-                                        {detectingLocation ? 'Detecting...' : 'Detect GPS Coarse'}
+                                        <span>{detectingLocation ? 'Detecting...' : 'Detect GPS Coarse'}</span>
                                     </button>
                                 </div>
                                 <p className="text-text-muted text-xs">
@@ -398,14 +398,18 @@ export default function CreatePostPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-primary flex-1"
+                            data-loading={loading}
+                            aria-busy={loading}
+                            className="btn-primary flex-1 flex items-center justify-center gap-2 select-none touch-manipulation"
                         >
-                            {loading ? 'Creating...' : 'Create Post'}
+                            {loading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                            <span>{loading ? 'Creating Post...' : 'Create Post'}</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => router.back()}
-                            className="btn-outline"
+                            disabled={loading}
+                            className="btn-outline select-none touch-manipulation"
                         >
                             Cancel
                         </button>

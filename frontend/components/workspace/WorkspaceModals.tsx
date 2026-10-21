@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { 
-    X, Plus, Settings, UserMinus, Flag
+    X, Plus, Settings, UserMinus, Flag, Loader2
 } from 'lucide-react';
 
 interface CreateTaskModalProps {
@@ -54,7 +54,12 @@ export function CreateTaskModal({
                         <Plus className="w-4 h-4 text-brand" />
                         Create New Task
                     </h3>
-                    <button onClick={onClose} className="p-1 rounded-lg text-text-secondary hover:text-white">
+                    <button 
+                        type="button"
+                        onClick={onClose} 
+                        aria-label="Close modal"
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-90 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+                    >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -145,16 +150,18 @@ export function CreateTaskModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface transition-colors"
+                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-95 transition-all touch-manipulation"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg disabled:opacity-50"
+                            aria-busy={loading}
+                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand flex items-center gap-1.5"
                         >
-                            {loading ? 'Creating...' : 'Create Task'}
+                            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            <span>{loading ? 'Creating Task...' : 'Create Task'}</span>
                         </button>
                     </div>
                 </form>
@@ -198,7 +205,12 @@ export function CreateMilestoneModal({
                         <Flag className="w-4 h-4 text-brand" />
                         Create Roadmap Milestone
                     </h3>
-                    <button onClick={onClose} className="p-1 rounded-lg text-text-secondary hover:text-white">
+                    <button 
+                        type="button"
+                        onClick={onClose} 
+                        aria-label="Close modal"
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-90 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+                    >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -247,16 +259,18 @@ export function CreateMilestoneModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface transition-colors"
+                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-95 transition-all touch-manipulation"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg disabled:opacity-50"
+                            aria-busy={loading}
+                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand flex items-center gap-1.5"
                         >
-                            {loading ? 'Creating...' : 'Create Milestone'}
+                            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            <span>{loading ? 'Creating Milestone...' : 'Create Milestone'}</span>
                         </button>
                     </div>
                 </form>
@@ -298,7 +312,12 @@ export function WorkspaceSettingsModal({
                         <Settings className="w-4 h-4 text-brand" />
                         Workspace Links & Settings
                     </h3>
-                    <button onClick={onClose} className="p-1 rounded-lg text-text-secondary hover:text-white">
+                    <button 
+                        type="button"
+                        onClick={onClose} 
+                        aria-label="Close modal"
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-90 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+                    >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -347,13 +366,13 @@ export function WorkspaceSettingsModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface transition-colors"
+                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-95 transition-all touch-manipulation"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg"
+                            className="btn-brand px-4 py-2 text-xs font-semibold rounded-lg active:scale-95 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-brand"
                         >
                             Save Settings
                         </button>
@@ -389,7 +408,12 @@ export function RemoveMemberModal({
                         <UserMinus className="w-4 h-4 text-rose-400" />
                         Remove Team Member
                     </h3>
-                    <button onClick={onClose} className="p-1 rounded-lg text-text-secondary hover:text-white">
+                    <button 
+                        type="button"
+                        onClick={onClose} 
+                        aria-label="Close modal"
+                        className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-rose-500/10 active:scale-90 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none"
+                    >
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -417,7 +441,7 @@ export function RemoveMemberModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface transition-colors"
+                            className="px-4 py-2 text-xs font-medium rounded-lg text-text-secondary hover:text-white hover:bg-surface active:scale-95 transition-all touch-manipulation"
                         >
                             Cancel
                         </button>
@@ -425,7 +449,7 @@ export function RemoveMemberModal({
                             type="button"
                             onClick={onConfirm}
                             disabled={!reason.trim()}
-                            className="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white shadow-md shadow-rose-500/20 transition-all"
+                            className="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white shadow-md shadow-rose-500/20 active:scale-95 transition-all touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500"
                         >
                             Confirm Removal
                         </button>

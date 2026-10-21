@@ -11,16 +11,21 @@ Validates:
 - Canonical navigation URL generation
 """
 import uuid
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from apps.posts.models import Post
 from apps.users.models import BlockedUser
 from .models import Notification, NotificationActor, NotificationMute, NotificationOutbox
 from .services import NotificationService, OutboxProcessor, resolve_canonical_action_url
+from .tasks import deliver_outbox_entry_task, process_pending_outbox_batch_task
 
 User = get_user_model()
 
@@ -341,6 +346,97 @@ class NotificationEngineTests(TestCase):
         self.assertEqual(outbox.user, self.owner)
         self.assertEqual(outbox.channel, 'websocket')
         self.assertEqual(outbox.status, 'pending')
+
+    def test_outbox_delivery_is_dispatched_after_commit(self):
+        """The transaction commit hook enqueues delivery with the durable row IDs."""
+        with patch('apps.notifications.tasks.deliver_outbox_entry_task.delay') as delay:
+            with self.captureOnCommitCallbacks(execute=True):
+                notif = NotificationService.send_event(
+                    recipient=self.owner,
+                    actor=self.liker1,
+                    event_type='follow',
+                    target_type='user',
+                    target_id=str(self.liker1.id),
+                )
+
+            outbox = NotificationOutbox.objects.get(notification=notif)
+
+        delay.assert_called_once_with(str(outbox.id), str(self.owner.id))
+        self.assertEqual(outbox.status, 'pending')
+
+    def test_failed_celery_dispatch_uses_inline_fallback(self):
+        """A broker dispatch error invokes inline delivery and unread broadcasting."""
+        with patch(
+            'apps.notifications.tasks.deliver_outbox_entry_task.delay',
+            side_effect=RuntimeError('broker unavailable'),
+        ), patch('apps.notifications.services.OutboxProcessor.deliver_entry') as deliver, patch(
+            'apps.notifications.services.OutboxProcessor.broadcast_unread_count'
+        ) as broadcast:
+            with self.captureOnCommitCallbacks(execute=True):
+                notif = NotificationService.send_event(
+                    recipient=self.owner,
+                    actor=self.liker1,
+                    event_type='follow',
+                    target_type='user',
+                    target_id=str(self.liker1.id),
+                )
+
+        outbox = NotificationOutbox.objects.get(notification=notif)
+        deliver.assert_called_once_with(str(outbox.id))
+        broadcast.assert_called_once_with(str(self.owner.id))
+
+    def test_pending_outbox_batch_retries_due_entries(self):
+        """Scheduled batch processing retries due rows and leaves future rows alone."""
+        due = NotificationOutbox.objects.create(
+            user=self.owner,
+            event_type='notification',
+            payload={'message': 'due'},
+            status='pending',
+            next_retry_at=timezone.now() - timedelta(seconds=1),
+        )
+        future = NotificationOutbox.objects.create(
+            user=self.owner,
+            event_type='notification',
+            payload={'message': 'future'},
+            status='pending',
+            next_retry_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        with patch('apps.notifications.services.get_channel_layer') as get_layer:
+            from channels.layers import InMemoryChannelLayer
+            get_layer.return_value = InMemoryChannelLayer()
+            delivered = process_pending_outbox_batch_task.run(limit=100)
+
+        self.assertEqual(delivered, 1)
+        due.refresh_from_db()
+        future.refresh_from_db()
+        self.assertEqual(due.status, 'delivered')
+        self.assertEqual(future.status, 'pending')
+
+    def test_delivery_worker_task_delivers_and_broadcasts(self):
+        outbox = NotificationOutbox.objects.create(
+            user=self.owner,
+            event_type='notification',
+            payload={'message': 'worker test'},
+            status='pending',
+        )
+        with patch('apps.notifications.services.OutboxProcessor.deliver_entry', return_value=True) as deliver, patch(
+            'apps.notifications.services.OutboxProcessor.broadcast_unread_count'
+        ) as broadcast:
+            result = deliver_outbox_entry_task.run(str(outbox.id), str(self.owner.id))
+
+        self.assertTrue(result)
+        deliver.assert_called_once_with(str(outbox.id))
+        broadcast.assert_called_once_with(str(self.owner.id))
+
+    def test_outbox_batch_is_scheduled_by_celery_beat(self):
+        """Deploying the beat process schedules recovery for pending outbox rows."""
+        from django.conf import settings
+
+        schedule = settings.CELERY_BEAT_SCHEDULE['process-pending-notification-outbox']
+        self.assertEqual(schedule['task'], 'notifications.process_pending_outbox_batch')
+        self.assertEqual(schedule['schedule'], 60.0)
+        self.assertEqual(schedule['kwargs'], {'limit': 100})
 
     def test_canonical_action_urls(self):
         """Verification that targets resolve strictly server-side."""

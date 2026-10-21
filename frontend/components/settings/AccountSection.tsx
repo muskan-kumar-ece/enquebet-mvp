@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { User, Mail, Sparkles, LogOut, Check, AlertCircle } from 'lucide-react';
+import { User, Mail, Sparkles, LogOut, Check, AlertCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AccountSectionProps {
@@ -64,7 +64,7 @@ export function AccountSection({ user, onUpdateUser, onLogout }: AccountSectionP
                 <button
                     type="button"
                     onClick={() => setShowLogoutModal(true)}
-                    className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-surface hover:bg-surface-hover border border-[#1e2335] text-slate-300 hover:text-white flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto"
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-surface hover:bg-surface-hover active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 border border-[#1e2335] text-slate-300 hover:text-white flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto"
                 >
                     <LogOut className="w-3.5 h-3.5 text-rose-400" />
                     <span>Log Out</span>
@@ -180,10 +180,14 @@ export function AccountSection({ user, onUpdateUser, onLogout }: AccountSectionP
                     <button
                         type="submit"
                         disabled={saving}
-                        className="btn-brand px-5 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-2 transition-all disabled:opacity-50"
+                        aria-busy={saving}
+                        className="btn-brand px-5 py-2 text-xs font-semibold rounded-xl text-white flex items-center gap-2 transition-all active:scale-[0.98] touch-manipulation focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
                     >
                         {saving ? (
-                            <span>Saving Changes...</span>
+                            <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Saving Changes...</span>
+                            </>
                         ) : (
                             <>
                                 <Check className="w-3.5 h-3.5" />
@@ -216,26 +220,30 @@ export function AccountSection({ user, onUpdateUser, onLogout }: AccountSectionP
                             <button
                                 type="button"
                                 disabled={loggingOut}
+                                aria-busy={loggingOut}
                                 onClick={() => handleConfirmLogout(false)}
-                                className="flex-1 px-4 py-2 text-xs font-semibold rounded-xl bg-[#1864ff] hover:bg-[#1864ff]/90 text-white transition-all disabled:opacity-50"
+                                className="flex-1 px-4 py-2 text-xs font-semibold rounded-xl bg-[#1864ff] hover:bg-[#1864ff]/90 text-white transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-[#1864ff] disabled:opacity-50 flex items-center justify-center gap-1.5"
                             >
-                                {loggingOut ? 'Signing out...' : 'Sign Out This Device'}
+                                {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                                <span>{loggingOut ? 'Signing out...' : 'Sign Out This Device'}</span>
                             </button>
 
                             <button
                                 type="button"
                                 disabled={loggingOut}
+                                aria-busy={loggingOut}
                                 onClick={() => handleConfirmLogout(true)}
-                                className="flex-1 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-all disabled:opacity-50"
+                                className="flex-1 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-all active:scale-95 touch-manipulation focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50 flex items-center justify-center gap-1.5"
                             >
-                                Sign Out All Devices
+                                {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-300" /> : null}
+                                <span>Sign Out All Devices</span>
                             </button>
                         </div>
 
                         <button
                             type="button"
                             onClick={() => setShowLogoutModal(false)}
-                            className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                            className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white active:scale-95 transition-all touch-manipulation"
                         >
                             Cancel
                         </button>

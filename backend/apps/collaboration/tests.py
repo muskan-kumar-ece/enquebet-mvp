@@ -400,6 +400,27 @@ class TasksKanbanTestCase(TestCase):
         self.assertEqual(task.status, 'in_progress')
         self.assertEqual(task.assignee, self.contributor)
 
+    def test_workspace_task_count_excludes_cancelled_tasks(self):
+        """The annotated workspace response preserves serializer count semantics."""
+        ProjectTask.objects.create(
+            workspace=self.workspace,
+            creator=self.owner,
+            title='Active task',
+            status='backlog',
+        )
+        ProjectTask.objects.create(
+            workspace=self.workspace,
+            creator=self.owner,
+            title='Cancelled task',
+            status='cancelled',
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get(f'/api/v1/workspaces/{self.workspace.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['tasks_count'], 1)
+
 
 class DeliverablesReviewTestCase(TestCase):
     def setUp(self):

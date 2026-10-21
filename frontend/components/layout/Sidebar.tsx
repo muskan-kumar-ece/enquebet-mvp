@@ -76,7 +76,7 @@ export default function Sidebar() {
     const sidebarContent = (
         <>
             {/* Logo */}
-            <div className="p-5 pb-4 flex items-center justify-between">
+            <div className="p-4 sm:p-5 pb-3 sm:pb-4 flex items-center justify-between shrink-0 border-b border-border-default/40">
                 <Link href="/" className="flex items-center gap-3 group" onClick={() => setMobileOpen(false)}>
                     <BrandLogo size="md" mode="vector" />
                     <div>
@@ -92,8 +92,9 @@ export default function Sidebar() {
 
                 {/* Close button — mobile only */}
                 <button
+                    type="button"
                     onClick={() => setMobileOpen(false)}
-                    className="lg:hidden p-2 rounded-lg hover:bg-bg-hover text-text-muted transition-colors"
+                    className="lg:hidden p-2 rounded-lg hover:bg-bg-hover active:bg-bg-hover-light active:scale-90 text-text-muted transition-all select-none touch-manipulation cursor-pointer"
                     aria-label="Close menu"
                 >
                     <X className="w-5 h-5" />
@@ -101,7 +102,7 @@ export default function Sidebar() {
             </div>
 
             {/* Core Navigation */}
-            <nav className="px-3 space-y-0.5 flex-1">
+            <nav className="px-3 py-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 {coreNavItems.map(renderNavItem)}
 
                 {/* Divider */}
@@ -114,7 +115,7 @@ export default function Sidebar() {
             </nav>
 
             {/* Settings */}
-            <div className="p-3 mt-auto border-t border-border-default">
+            <div className="p-3 shrink-0 border-t border-border-default bg-bg-primary pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Link
                     href="/settings"
                     className={`nav-item ${pathname === '/settings' ? 'nav-item-active' : ''}`}
@@ -132,8 +133,9 @@ export default function Sidebar() {
             {/* Mobile top bar */}
             <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-bg-primary/95 backdrop-blur-md border-b border-border-default h-14 flex items-center px-4 gap-3">
                 <button
+                    type="button"
                     onClick={() => setMobileOpen(true)}
-                    className="p-2 -ml-2 rounded-lg hover:bg-bg-hover transition-colors"
+                    className="p-2 -ml-2 rounded-lg hover:bg-bg-hover active:bg-bg-hover-light active:scale-90 transition-all select-none touch-manipulation cursor-pointer"
                     aria-label="Open menu"
                 >
                     <Menu className="w-5 h-5" />
@@ -168,7 +170,7 @@ export default function Sidebar() {
             {/* Sidebar — desktop: always visible; mobile: slide-in drawer */}
             <aside
                 className={`
-                    fixed left-0 top-0 h-screen w-64 bg-bg-primary border-r border-border-default overflow-y-auto flex flex-col z-50
+                    fixed left-0 top-0 h-[100dvh] w-64 bg-bg-primary border-r border-border-default overflow-hidden flex flex-col z-50
                     transition-transform duration-300 ease-in-out
                     lg:translate-x-0 lg:z-30
                     ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
