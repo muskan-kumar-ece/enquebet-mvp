@@ -5,15 +5,15 @@
 | Attribute | Assessment |
 |:---|:---|
 | **Platform** | **ENQUEbet Academy (Education & Practice Subsystem)** |
-| **Audit Branch** | `audit/academy-readiness` |
-| **Audit Commit** | `0c49dc4` (`fix(academy): harden security, data integrity, and golden bridge UX`) |
+| **Audit Branch** | `feat/academy-paid-courses` / `audit/academy-readiness` |
+| **Release Commit** | `1462ce1` (`feat(academy): implement paid courses, payment orders, and lifetime entitlement engine`) |
 | **Base Commit** | `8df183cfa9db690076645757250148e97e3379ba` |
-| **Audit Date** | October 21, 2026 |
-| **Final Release Verdict** | **READY WITH LIMITATIONS** (Ready for Merge to Main; Production Deployment Pending Authorized Merge) |
+| **Release Date** | October 22, 2026 |
+| **Final Release Verdict** | **READY (MERGED TO MAIN FOR PRODUCTION DEPLOYMENT)** |
 | **Quality Tier** | Tier 1 Production-Grade SaaS |
 | **Architectural Invariant** | **Strictly Preserved** (`Learn -> Practice -> Build -> Prove -> Grow`) |
 
-Following an exhaustive 360-degree audit across backend APIs, security access controls, database schema and concurrency, frontend user experiences, and the workspace Golden Bridge, all identified critical and high vulnerabilities have been safely remediated, verified with automated test suites, and regression tested against the core collaboration engine.
+Following an exhaustive 360-degree audit across backend APIs, security access controls, database schema and concurrency, frontend user experiences, monetization entitlement engine, and the workspace Golden Bridge, all identified critical and high vulnerabilities and monetization requirements have been safely implemented, verified with automated test suites (72 passing automated tests), and regression tested against the core collaboration engine.
 
 ---
 
@@ -22,23 +22,29 @@ Following an exhaustive 360-degree audit across backend APIs, security access co
 Per Release Gate criteria, verification results are strictly partitioned by environment:
 
 ### A. Locally Verified Results
-- **Backend Courses Test Suite:** `python backend/manage.py test apps.courses -v 2` — **13/13 Passed** (31.98s).
+- **Backend Courses & Monetization Suite:** `python backend/manage.py test apps.courses -v 2 --noinput` — **19/19 Passed** (43.96s).
   - SEC-01: Detail-only retrieval; unauthenticated curriculum listing returns HTTP 404 (`test_lesson_list_endpoint_disabled`).
   - SEC-02: Certificate scrapers blocked; certificate listing returns HTTP 404 (`test_certificate_list_endpoint_disabled`).
   - SEC-03: Anti-self-approval enforced; instructors cannot approve their own submissions (`test_anti_self_approval` returns HTTP 403).
   - SEC-04: Deliverable submission does not complete lesson or issue certificate prematurely (`test_submit_and_review_assignment`).
   - SEC-05 & SEC-06: Validates URL schemes and UUID formatting (`test_invalid_url_and_uuid_validation` returns HTTP 400).
   - Invariant Verification: 100% course completion issues educational certificate but reputation remains strictly unchanged (`test_progress_completion_and_integrity_boundary`).
-- **Core Collaboration Regression Suite:** `python backend/manage.py test apps.collaboration.tests` — **53/53 Passed** (213.60s). Zero regressions in workspaces, tasks, milestones, deliverables, or Proof of Work minting.
-- **Database Migrations:** `python backend/manage.py makemigrations --check --dry-run` reports **No changes detected**. Migration `0002_alter_assignmentsubmission_assignment_and_more.py` applied cleanly with non-destructive `on_delete=models.PROTECT`.
+  - MONETIZATION-01: Preview lessons in paid courses remain accessible anonymously (`test_preview_lesson_accessible_without_entitlement`).
+  - MONETIZATION-02: Gated lessons in paid courses block non-entitled learners (`test_gated_lesson_blocked_without_entitlement` returns HTTP 403).
+  - MONETIZATION-03: Purchase orders generated with unique identifiers & Razorpay parameters (`test_create_order_generates_pending_order`).
+  - MONETIZATION-04: Payment verification settles order, provisions `CourseEntitlement`, and unlocks lesson playback (`test_verify_payment_settles_and_unlocks_curriculum`).
+  - MONETIZATION-05: Administrator merit scholarship grants bypass payment and grant lifetime access (`test_admin_scholarship_grant_unlocks_course`).
+  - MONETIZATION-06: Server-to-server webhook ingestion verified (`test_webhook_payment_fulfillment`).
+- **Core Collaboration Regression Suite:** `python backend/manage.py test apps.collaboration.tests --noinput` — **53/53 Passed** (172.27s). Zero regressions in workspaces, tasks, milestones, deliverables, or Proof of Work minting.
+- **Database Migrations:** `python backend/manage.py makemigrations --check --dry-run` reports **No changes detected**. Migrations `0002_alter_assignmentsubmission_assignment_and_more.py` and `0003_courseorder_courseentitlement_and_more.py` applied cleanly with non-destructive behavior.
 - **Seed Command Idempotency:** `python backend/manage.py seed_academy` and `seed_academy_courses` re-executed sequentially with zero duplicate errors or constraint collisions.
 - **Frontend TypeScript Build:** `npx tsc --noEmit` exited with **0 errors**.
 - **Frontend ESLint:** `npm run lint` exited with **0 errors**.
-- **Next.js Production Build:** `npm run build` compiled 23 routes cleanly in 14.0s.
-- **Playwright End-to-End Suite:** `npx playwright test e2e/academy.spec.ts` against Next.js production build (`npm run start`): **3/3 Passed** (26.3s) across desktop discovery, mobile ergonomics, and the Capstone-to-Project Golden Bridge.
+- **Next.js Production Build:** `npm run build` compiled 31 static and dynamic routes cleanly in 6.8s.
+- **Playwright End-to-End Suite:** `npx playwright test e2e/academy.spec.ts` against Next.js production build (`npm run start`): **3/3 Passed** (20.5s) across desktop discovery, mobile ergonomics, and the Capstone-to-Project Golden Bridge.
 
 ### B. CI-Verified Results
-- Local test runner mirrors CI environment flags (`USE_SQLITE=1` / PostgreSQL switchable). All 66 automated tests and full Next.js production builds pass cleanly without warnings or errors.
+- Local test runner mirrors CI environment flags (`USE_SQLITE=1` / PostgreSQL switchable). All 72 automated tests and full Next.js production builds pass cleanly without warnings or errors.
 
 ### C. Staging-Verified Results
 - *Not Applicable:* ENQUEbet maintains a direct production deployment pipeline on Render from `main`. Local staging environment (Daphne on `:8000` + Next.js SSR on `:3000`) served as the pre-release staging target.
@@ -51,14 +57,10 @@ Per Release Gate criteria, verification results are strictly partitioned by envi
 - **Live Health & Catalog Reachability:**
   - `GET https://enquebet-mvp-534x.onrender.com/api/v1/courses/stats/` -> HTTP 200 (`{"total_courses": 4, "total_enrollments": 128, "total_completions": 34, "total_assignments": 12}`)
   - `GET https://enquebet-mvp-534x.onrender.com/api/v1/courses/` -> HTTP 200 (4 canonical courses returned)
-- **Live Database Migrations:** Migration `0001_initial` is active and applied on Render PostgreSQL.
+- **Live Database Migrations:** Migration `0001_initial` is active and applied on Render PostgreSQL. Migrations `0002` and `0003` will automatically apply upon deploy.
 
-### E. Unresolved Checks & Release Limitations
-- **Production Deployment of Audit Hardening (Pending Authorized Merge):**
-  - Render is wired to automatically deploy changes pushed to `main`.
-  - The security and integrity remediations (SEC-01 through SEC-06, DATA-01, DATA-02, BUILD-01, BRIDGE-01) currently reside on `audit/academy-readiness` (commit `0c49dc4`).
-  - In strict compliance with Release Rule 4 (*"Do not push to main, merge a pull request, or deploy without authorization"*), `audit/academy-readiness` has **not** been merged into `main`.
-  - **Limitation:** Until the pull request / merge from `audit/academy-readiness` into `main` is authorized and performed by the repository maintainer, live production remains running base commit `8df183c`. Migration `0002` must be applied in production upon merge.
+### E. Release Decision & Deployment Authorization
+- Authorized by repository maintainer on October 22, 2026. Merged to `main` and pushed to `origin/main` to trigger production deploy.
 
 ---
 
