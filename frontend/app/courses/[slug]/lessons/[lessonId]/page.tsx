@@ -3,12 +3,13 @@
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { LessonDetail, Course } from '@/types/academy';
 import { CANONICAL_ACADEMY_COURSES } from '@/lib/academyData';
 import LessonPlayer from '@/components/academy/LessonPlayer';
+import { CourseCheckoutModal } from '@/components/academy/CourseCheckoutModal';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function LessonViewPage({
@@ -25,6 +26,7 @@ export default function LessonViewPage({
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const [accessDenied, setAccessDenied] = useState(false);
+    const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
     useEffect(() => {
         async function loadLessonAndCourse() {
@@ -104,35 +106,74 @@ export default function LessonViewPage({
     }
 
     if (accessDenied) {
+        const isPremiumCourse = Boolean(course?.access_tier === 'premium' || (course?.price_inr && course.price_inr > 0));
+
         return (
             <div className="min-h-screen bg-[#07070d] flex flex-col items-center justify-center p-6 text-center">
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-4">
+                <div className={`p-4 rounded-2xl mb-4 ${
+                    isPremiumCourse
+                        ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+                }`}>
                     <Lock className="w-8 h-8" />
                 </div>
-                <h2 className="text-lg font-bold text-white mb-2">Enrollment Required</h2>
+                <h2 className="text-lg font-bold text-white mb-2">
+                    {isPremiumCourse ? 'Premium Specialization Lesson' : 'Enrollment Required'}
+                </h2>
                 <p className="text-xs text-zinc-400 max-w-md mb-6 leading-relaxed">
-                    This lesson is reserved for enrolled builders. Enroll in the masterclass for free to unlock
-                    full curriculum access, progress tracking, and capstones.
+                    {isPremiumCourse
+                        ? `This lesson is part of the premium specialization "${course?.title || 'Masterclass'}". Unlock lifetime access to all lessons, source code, and capstone code reviews.`
+                        : 'This lesson is reserved for enrolled builders. Enroll in the masterclass for free to unlock full curriculum access, progress tracking, and capstones.'}
                 </p>
                 <div className="flex items-center gap-3">
-                    <Link href={`/courses/${slug}`} className="btn-outline text-xs px-4 py-2">
+                    <Link href={`/courses/${slug}`} className="btn-outline text-xs px-4 py-2.5">
                         Back to Overview
                     </Link>
-                    <button
-                        onClick={async () => {
-                            try {
-                                await api.enrollCourse(slug);
-                                toast.success('Enrolled! Reloading lesson...');
-                                window.location.reload();
-                            } catch (e: any) {
-                                toast.error(e.message || 'Enrollment failed');
-                            }
-                        }}
-                        className="btn-brand text-xs px-4 py-2"
-                    >
-                        Enroll for Free
-                    </button>
+                    {isPremiumCourse ? (
+                        <button
+                            onClick={() => {
+                                if (!user) {
+                                    toast.error('Please sign in to unlock this specialization.');
+                                    router.push(`/auth/login?next=/courses/${slug}/lessons/${lessonId}`);
+                                    return;
+                                }
+                                setIsCheckoutOpen(true);
+                            }}
+                            className="py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                            <Zap className="w-3.5 h-3.5 fill-white" />
+                            <span>Unlock Course — ₹{course?.price_inr?.toLocaleString('en-IN')}</span>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={async () => {
+                                try {
+                                    await api.enrollCourse(slug);
+                                    toast.success('Enrolled! Reloading lesson...');
+                                    window.location.reload();
+                                } catch (e: any) {
+                                    toast.error(e.message || 'Enrollment failed');
+                                }
+                            }}
+                            className="btn-brand text-xs px-4 py-2.5"
+                        >
+                            Enroll for Free
+                        </button>
+                    )}
                 </div>
+
+                {course && (
+                    <CourseCheckoutModal
+                        course={course}
+                        isOpen={isCheckoutOpen}
+                        onClose={() => setIsCheckoutOpen(false)}
+                        onSuccess={() => {
+                            setIsCheckoutOpen(false);
+                            toast.success('Payment verified! Unlocking lesson...');
+                            window.location.reload();
+                        }}
+                    />
+                )}
             </div>
         );
     }

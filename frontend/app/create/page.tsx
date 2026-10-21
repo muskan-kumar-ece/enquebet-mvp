@@ -1,16 +1,22 @@
 "use client";
 
-import { useCallback, useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { X, MapPin, Globe, GraduationCap, RefreshCw, Loader2 } from 'lucide-react';
+import { useCallback, useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { X, MapPin, Globe, GraduationCap, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { requestUserCoordinates } from '@/lib/geo';
 import MediaUpload from '@/components/ui/MediaUpload';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import toast from 'react-hot-toast';
 
-export default function CreatePostPage() {
+function CreatePostForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const isAcademyBridge = searchParams?.get('ref') === 'academy_assignment';
+    const bridgeTitle = searchParams?.get('title') || '';
+    const rawTags = searchParams?.get('tags');
+    const bridgeTags = rawTags ? rawTags.split(',').filter(Boolean) : [];
+    const starterRepo = searchParams?.get('starter_repo') || '';
     const { user } = useRequireAuth();
     const isSubmittingRef = useRef(false);
     const clientPostIdRef = useRef<string>(
@@ -40,6 +46,20 @@ export default function CreatePostPage() {
             setFormData(prev => ({ ...prev, college: user.college || '' }));
         }
     }, [user, formData.college]);
+
+    useEffect(() => {
+        if (isAcademyBridge) {
+            setFormData(prev => ({
+                ...prev,
+                title: prev.title || (bridgeTitle ? `[Squad Project] ${bridgeTitle}` : ''),
+                tags: bridgeTags.length > 0 && prev.tags.every(t => !t) ? bridgeTags : prev.tags,
+                description: prev.description || (starterRepo 
+                    ? `Building the ${bridgeTitle} production capstone with a dedicated builder squad.\n\nStarter Repository: ${starterRepo}\n\nSeeking collaborative builders to implement, review deliverables, and deploy to production.`
+                    : `Building the ${bridgeTitle} production capstone with a dedicated builder squad. Seeking collaborative builders to implement, review deliverables, and deploy to production.`),
+                requirements: prev.requirements.every(r => !r) ? ['Fullstack / Frontend Engineer', 'Code Reviewer'] : prev.requirements,
+            }));
+        }
+    }, [isAcademyBridge, bridgeTitle, starterRepo]);
 
     const handleDetectLocation = async () => {
         setDetectingLocation(true);
@@ -140,6 +160,20 @@ export default function CreatePostPage() {
                     <h1 className="text-3xl font-bold">Create New Post</h1>
                     <p className="text-text-secondary mt-2">Share your idea and find collaborators</p>
                 </div>
+
+                {isAcademyBridge && (
+                    <div className="mb-6 p-4 rounded-xl border border-purple-500/30 bg-purple-950/20 flex items-start gap-3">
+                        <Sparkles className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+                        <div>
+                            <h3 className="text-sm font-semibold text-white">
+                                Academy Capstone · Golden Bridge
+                            </h3>
+                            <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed">
+                                You are transitioning from learning to building. Launch this project to assemble a builder squad, execute tasks in a dedicated workspace, and earn verified Proof of Work upon peer-reviewed completion!
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Form */}
                 <form
@@ -417,5 +451,17 @@ export default function CreatePostPage() {
                 </form>
             </div>
         </div>
+    );
+}
+
+export default function CreatePostPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen p-6 flex items-center justify-center text-text-muted">
+                <Loader2 className="w-8 h-8 animate-spin mb-3 text-brand-primary" />
+            </div>
+        }>
+            <CreatePostForm />
+        </Suspense>
     );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { LessonDetail, CourseModule } from '@/types/academy';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
+import { useNavigationUI } from '@/lib/contexts/NavigationContext';
 
 interface LessonPlayerProps {
     lesson: LessonDetail;
@@ -45,9 +46,16 @@ export default function LessonPlayer({
     onProgressUpdated,
 }: LessonPlayerProps) {
     const router = useRouter();
+    const { setHideMobileNav } = useNavigationUI();
     const [isCompleted, setIsCompleted] = useState<boolean>(lesson.is_completed);
     const [updating, setUpdating] = useState<boolean>(false);
     const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+
+    // Hide mobile bottom nav to ensure unhindered distraction-free learning on mobile
+    useEffect(() => {
+        setHideMobileNav(true);
+        return () => setHideMobileNav(false);
+    }, [setHideMobileNav]);
 
     const handleToggleComplete = async () => {
         try {

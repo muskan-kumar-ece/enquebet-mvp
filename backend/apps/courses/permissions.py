@@ -8,7 +8,7 @@ def is_academy_admin(user):
     """Check if user has admin/staff privileges across the platform"""
     if not user or not user.is_authenticated:
         return False
-    return bool(user.is_staff or user.is_superuser or getattr(user, 'role', '') in ['admin', 'superadmin', 'moderator'])
+    return bool(user.is_staff or user.is_superuser)
 
 
 class IsCourseInstructorOrAdmin(BasePermission):
@@ -43,6 +43,17 @@ class HasLessonAccess(BasePermission):
         course = obj.module.course
         if course.creator == user:
             return True
+
+        # For premium courses, verify active commercial entitlement
+        if course.access_tier == 'premium' or (course.price_inr and course.price_inr > 0):
+            from .models import CourseEntitlement
+            has_entitlement = CourseEntitlement.objects.filter(
+                user=user,
+                course=course,
+                is_active=True
+            ).exists()
+            if not has_entitlement:
+                return False
 
         # Check active enrollment
         return course.enrollments.filter(user=user, status__in=['active', 'completed']).exists()

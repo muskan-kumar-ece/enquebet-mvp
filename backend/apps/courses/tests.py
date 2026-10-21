@@ -17,6 +17,8 @@ from apps.courses.models import (
     AssignmentSubmission,
     CourseCompletion,
     CourseBookmark,
+    CourseOrder,
+    CourseEntitlement,
     DifficultyLevel,
     CourseFormat,
     CourseStatus,
@@ -24,6 +26,8 @@ from apps.courses.models import (
     ContentType,
     EnrollmentStatus,
     SubmissionStatus,
+    OrderStatus,
+    PaymentGateway,
 )
 
 User = get_user_model()
@@ -199,8 +203,12 @@ class EnrollmentAndProgressTests(AcademyBaseTestCase):
 class AssignmentWorkflowTests(AcademyBaseTestCase):
     """Assignment submission and instructor review tests"""
     def test_submit_and_review_assignment(self):
-        Enrollment.objects.create(user=self.learner, course=self.course)
+        enrollment = Enrollment.objects.create(user=self.learner, course=self.course)
         self.client.force_authenticate(user=self.learner)
+
+        # Attach assignment to lesson 2
+        self.assignment.lesson = self.lesson2
+        self.assignment.save(update_fields=['lesson'])
 
         # Submit deliverable
         sub_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
@@ -210,7 +218,11 @@ class AssignmentWorkflowTests(AcademyBaseTestCase):
         self.assertEqual(sub_res.status_code, status.HTTP_201_CREATED)
         submission_id = sub_res.data['submission']['id']
 
-        # Review as instructor
+        # Ensure submitting alone does NOT mark lesson complete (SEC-04 fix verification)
+        progress = LessonProgress.objects.filter(enrollment=enrollment, lesson=self.lesson2).first()
+        self.assertTrue(progress is None or not progress.is_completed)
+
+        # Review as instructor with approval
         self.client.force_authenticate(user=self.instructor)
         review_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
             'submission_id': submission_id,
@@ -219,6 +231,74 @@ class AssignmentWorkflowTests(AcademyBaseTestCase):
         })
         self.assertEqual(review_res.status_code, status.HTTP_200_OK)
         self.assertEqual(review_res.data['submission']['status'], 'approved')
+
+        # Now lesson 2 progress must be completed
+        progress = LessonProgress.objects.filter(enrollment=enrollment, lesson=self.lesson2).first()
+        self.assertIsNotNone(progress)
+        self.assertTrue(progress.is_completed)
+
+    def test_anti_self_approval(self):
+        """Instructors cannot approve their own assignment submissions"""
+        Enrollment.objects.create(user=self.instructor, course=self.course)
+        self.client.force_authenticate(user=self.instructor)
+
+        sub_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
+            'repository_url': 'https://github.com/instructor/solution',
+            'submission_text': 'My own submission.'
+        })
+        self.assertEqual(sub_res.status_code, status.HTTP_201_CREATED)
+        submission_id = sub_res.data['submission']['id']
+
+        # Attempt to approve own submission
+        review_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
+            'submission_id': submission_id,
+            'status': SubmissionStatus.APPROVED,
+            'feedback': 'Self approval should fail.'
+        })
+        self.assertEqual(review_res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_url_and_uuid_validation(self):
+        """Ensures bad URLs and malformed UUIDs are rejected with 400 Bad Request"""
+        Enrollment.objects.create(user=self.learner, course=self.course)
+        self.client.force_authenticate(user=self.learner)
+
+        # Disallowed URL scheme (e.g. javascript:)
+        bad_url_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
+            'repository_url': 'javascript:alert("XSS")',
+            'submission_text': 'Exploit attempt.'
+        })
+        self.assertEqual(bad_url_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Malformed submission UUID in review
+        self.client.force_authenticate(user=self.instructor)
+        bad_uuid_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
+            'submission_id': 'not-a-valid-uuid',
+            'status': SubmissionStatus.APPROVED,
+        })
+        self.assertEqual(bad_uuid_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityAndAccessControlTests(AcademyBaseTestCase):
+    """Verifies prevention of curriculum leak, certificate scraping, and premium bypass"""
+    def test_lesson_list_endpoint_disabled(self):
+        """Anonymous or authenticated users cannot dump all curriculum via GET /lessons/"""
+        res = self.client.get('/api/v1/courses/lessons/')
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED])
+
+    def test_certificate_list_endpoint_disabled(self):
+        """Public users cannot scrape or enumerate certificates via GET /certificates/"""
+        res = self.client.get('/api/v1/courses/certificates/')
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED])
+
+    def test_premium_course_enrollment_protection(self):
+        """Learners cannot self-enroll in premium courses without administrative authorization"""
+        self.course.access_tier = AccessTier.PREMIUM
+        self.course.price_inr = 4999
+        self.course.save(update_fields=['access_tier', 'price_inr'])
+
+        self.client.force_authenticate(user=self.learner)
+        res = self.client.post(f'/api/v1/courses/{self.course.slug}/enroll/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class CourseBookmarkTests(AcademyBaseTestCase):
@@ -232,3 +312,167 @@ class CourseBookmarkTests(AcademyBaseTestCase):
         res_remove = self.client.post('/api/v1/courses/fullstack-saas/bookmark/')
         self.assertEqual(res_remove.status_code, status.HTTP_200_OK)
         self.assertFalse(res_remove.data['bookmarked'])
+
+
+class PaidCoursesMonetizationTests(AcademyBaseTestCase):
+    """
+    Exhaustive test suite for Paid Courses, Orders, Razorpay verification,
+    Entitlements, and Admin Scholarships.
+    """
+    def setUp(self):
+        super().setUp()
+        self.paid_course = Course.objects.create(
+            slug='advanced-ai-agents',
+            title='Autonomous AI Agent Architectures',
+            short_description='Build multi-agent frameworks in production',
+            full_description='Advanced deep dive into multi-agent swarms.',
+            category=self.category,
+            difficulty=DifficultyLevel.ADVANCED,
+            format=CourseFormat.PROJECT_BASED,
+            estimated_hours=25,
+            creator=self.instructor,
+            status=CourseStatus.PUBLISHED,
+            access_tier=AccessTier.PREMIUM,
+            price_inr=2499,
+            skills_gained=['Python', 'LangGraph', 'Vector DBs'],
+        )
+        self.paid_mod = CourseModule.objects.create(
+            course=self.paid_course,
+            title='Module 1: Agent Systems',
+            order=1
+        )
+        self.preview_lesson = Lesson.objects.create(
+            module=self.paid_mod,
+            title='Preview: Agent Concepts',
+            slug='preview-agent-concepts',
+            content_type=ContentType.ARTICLE,
+            duration_minutes=15,
+            is_preview=True,
+            order=1,
+            article_markdown='# Free Preview Content'
+        )
+        self.gated_lesson = Lesson.objects.create(
+            module=self.paid_mod,
+            title='Gated: Deep Reinforcement Agents',
+            slug='gated-rl-agents',
+            content_type=ContentType.WALKTHROUGH,
+            duration_minutes=45,
+            is_preview=False,
+            order=2,
+            article_markdown='# Gated Deep Dive Content'
+        )
+        self.admin_user = User.objects.create_superuser(
+            username='platform_admin',
+            email='admin@enquebet.com',
+            password='AdminPassword123!',
+            full_name='Platform Admin'
+        )
+
+    def test_preview_lesson_accessible_without_entitlement(self):
+        """Free preview lesson in a paid course can be read by anyone anonymously"""
+        res = self.client.get(f'/api/v1/courses/lessons/{self.preview_lesson.id}/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('Free Preview Content', res.data['article_markdown'])
+
+    def test_gated_lesson_blocked_without_entitlement(self):
+        """Non-preview lesson in a paid course is blocked with 403 for non-purchased learners"""
+        self.client.force_authenticate(user=self.learner)
+        res = self.client.get(f'/api/v1/courses/lessons/{self.gated_lesson.id}/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_order_generates_pending_order(self):
+        """Calling create-order generates a CourseOrder with simulated/gateway order ID"""
+        self.client.force_authenticate(user=self.learner)
+        res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/create-order/', {
+            'billing_name': 'Bob Learner',
+            'billing_email': 'bob@example.com'
+        })
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['amount_inr'], 2499)
+        self.assertEqual(res.data['amount_paise'], 249900)
+        self.assertTrue(res.data['order_number'].startswith('ENQ-ORD-'))
+        self.assertTrue(res.data['gateway_order_id'])
+
+        order = CourseOrder.objects.get(order_number=res.data['order_number'])
+        self.assertEqual(order.status, OrderStatus.PENDING)
+        self.assertEqual(order.user, self.learner)
+
+    def test_verify_payment_settles_and_unlocks_curriculum(self):
+        """Verifying payment marks order paid, creates entitlement, and allows lesson playback"""
+        self.client.force_authenticate(user=self.learner)
+        # 1. Create order
+        create_res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/create-order/')
+        order_num = create_res.data['order_number']
+
+        # 2. Verify payment (in test/sandbox simulation mode)
+        verify_res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/verify-payment/', {
+            'order_number': order_num,
+            'gateway_payment_id': 'pay_simulated_test_123',
+            'gateway_signature': 'sig_simulated_test_123'
+        })
+        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(verify_res.data['status'], OrderStatus.PAID)
+
+        # 3. Verify Entitlement exists
+        self.assertTrue(
+            CourseEntitlement.objects.filter(user=self.learner, course=self.paid_course, is_active=True).exists()
+        )
+
+        # 4. Gated lesson is now unlocked and accessible!
+        lesson_res = self.client.get(f'/api/v1/courses/lessons/{self.gated_lesson.id}/')
+        self.assertEqual(lesson_res.status_code, status.HTTP_200_OK)
+        self.assertIn('Gated Deep Dive Content', lesson_res.data['article_markdown'])
+
+    def test_admin_scholarship_grant_unlocks_course(self):
+        """Admin can grant zero-cost scholarship to a learner, unlocking access"""
+        # Non-admin cannot grant
+        self.client.force_authenticate(user=self.learner)
+        fail_res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/grant-access/', {
+            'username': self.learner.username,
+            'reason': 'Merit'
+        })
+        self.assertEqual(fail_res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Admin can grant
+        self.client.force_authenticate(user=self.admin_user)
+        success_res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/grant-access/', {
+            'username': self.learner.username,
+            'reason': 'Merit Scholarship'
+        })
+        self.assertEqual(success_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(success_res.data['is_active'])
+
+        # Learner can now access gated lesson
+        self.client.force_authenticate(user=self.learner)
+        lesson_res = self.client.get(f'/api/v1/courses/lessons/{self.gated_lesson.id}/')
+        self.assertEqual(lesson_res.status_code, status.HTTP_200_OK)
+
+    def test_webhook_payment_fulfillment(self):
+        """Simulated Razorpay server webhook settles order asynchronously"""
+        self.client.force_authenticate(user=self.learner)
+        create_res = self.client.post(f'/api/v1/courses/{self.paid_course.slug}/create-order/')
+        gateway_ord_id = create_res.data['gateway_order_id']
+
+        webhook_payload = {
+            'event': 'order.paid',
+            'payload': {
+                'payment': {
+                    'entity': {
+                        'id': 'pay_webhook_live_456',
+                        'order_id': gateway_ord_id
+                    }
+                }
+            }
+        }
+        import json
+        res = self.client.post(
+            '/api/v1/courses/payments/webhook/',
+            data=json.dumps(webhook_payload),
+            content_type='application/json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # Entitlement verified
+        self.assertTrue(
+            CourseEntitlement.objects.filter(user=self.learner, course=self.paid_course, is_active=True).exists()
+        )

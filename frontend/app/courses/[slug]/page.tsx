@@ -16,12 +16,15 @@ import {
     ShieldCheck,
     Bookmark,
     Sparkles,
+    Lock,
+    Zap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { Course } from '@/types/academy';
 import { CANONICAL_ACADEMY_COURSES } from '@/lib/academyData';
 import SyllabusAccordion from '@/components/academy/SyllabusAccordion';
+import { CourseCheckoutModal } from '@/components/academy/CourseCheckoutModal';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function CourseDetailPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -34,6 +37,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState(false);
+    const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
     useEffect(() => {
         async function loadCourse() {
@@ -55,7 +59,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
     const handleEnroll = async () => {
         if (!isAuthenticated) {
             toast.error('Please sign in to enroll in this course.');
-            router.push('/login?next=/courses/' + slug);
+            router.push('/auth/login?next=/courses/' + slug);
             return;
         }
 
@@ -115,7 +119,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
         );
     }
 
-    const isEnrolled = Boolean(course.is_enrolled);
+    const isEnrolled = Boolean(course.is_enrolled || course.is_entitled);
+    const isPremium = Boolean(course.access_tier === 'premium' || (course.price_inr && course.price_inr > 0));
+    const previewLesson = course.modules?.[0]?.lessons?.find((l) => l.is_preview);
     const progress = course.progress_percent || 0;
     const firstLessonId = course.modules?.[0]?.lessons?.[0]?.id;
     const resumeLessonId = course.last_accessed_lesson_id || firstLessonId;
@@ -284,11 +290,15 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
                                         Access Tier
                                     </div>
                                     <div className="text-2xl font-bold text-white">
-                                        {course.price_inr === 0 ? 'Free' : `₹${course.price_inr}`}
+                                        {isPremium ? `₹${course.price_inr?.toLocaleString('en-IN')}` : 'Free'}
                                     </div>
                                 </div>
-                                <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                    Open Foundation
+                                <span className={`px-3 py-1 rounded-full text-xs font-mono font-semibold ${
+                                    isPremium
+                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                                }`}>
+                                    {isPremium ? 'Premium Track' : 'Open Foundation'}
                                 </span>
                             </div>
 
@@ -322,6 +332,34 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
                                         <div className="text-xs text-center text-emerald-400 font-semibold py-2">
                                             Course Completed! 🏆
                                         </div>
+                                    )}
+                                </div>
+                            ) : isPremium ? (
+                                <div className="space-y-2.5">
+                                    <button
+                                        onClick={() => {
+                                            if (!isAuthenticated) {
+                                                toast.error('Please sign in to unlock this specialization.');
+                                                router.push('/auth/login?next=/courses/' + slug);
+                                                return;
+                                            }
+                                            setIsCheckoutOpen(true);
+                                        }}
+                                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                                    >
+                                        <Zap className="w-4 h-4 fill-white" />
+                                        <span>Unlock Course — ₹{course.price_inr?.toLocaleString('en-IN')}</span>
+                                        <ArrowRight className="w-4 h-4 ml-1" />
+                                    </button>
+
+                                    {previewLesson && (
+                                        <Link
+                                            href={`/courses/${course.slug}/lessons/${previewLesson.id}`}
+                                            className="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-[#1b1e2c] text-zinc-300 hover:text-white text-xs font-medium flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <span>Preview Lesson 1 Free</span>
+                                            <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
+                                        </Link>
                                     )}
                                 </div>
                             ) : (
@@ -412,6 +450,36 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
                     </div>
                 </div>
             </div>
+
+            {/* Paid Course Checkout Modal */}
+            {course && (
+                <CourseCheckoutModal
+                    course={course}
+                    isOpen={isCheckoutOpen}
+                    onClose={() => setIsCheckoutOpen(false)}
+                    onSuccess={() => {
+                        setIsCheckoutOpen(false);
+                        setCourse((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      is_enrolled: true,
+                                      is_entitled: true,
+                                      has_access: true,
+                                      enrolled_count: (prev.enrolled_count || 0) + 1,
+                                  }
+                                : null
+                        );
+                        toast.success('Course unlocked! Enjoy your masterclass 🎉');
+                        if (course.modules && course.modules.length > 0) {
+                            const firstLesson = course.modules[0].lessons?.[0];
+                            if (firstLesson) {
+                                router.push(`/courses/${course.slug}/lessons/${firstLesson.id}`);
+                            }
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 }
