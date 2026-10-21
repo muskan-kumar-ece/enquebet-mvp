@@ -44,5 +44,16 @@ class HasLessonAccess(BasePermission):
         if course.creator == user:
             return True
 
+        # For premium courses, verify active commercial entitlement
+        if course.access_tier == 'premium' or (course.price_inr and course.price_inr > 0):
+            from .models import CourseEntitlement
+            has_entitlement = CourseEntitlement.objects.filter(
+                user=user,
+                course=course,
+                is_active=True
+            ).exists()
+            if not has_entitlement:
+                return False
+
         # Check active enrollment
         return course.enrollments.filter(user=user, status__in=['active', 'completed']).exists()

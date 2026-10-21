@@ -133,6 +133,8 @@ export interface Course {
     last_accessed_lesson_id?: string | null;
     is_bookmarked?: boolean;
     certificate_code?: string | null;
+    is_entitled?: boolean;
+    has_access?: boolean;
     modules?: CourseModule[];
     assignments?: Assignment[];
     created_at: string;
@@ -167,4 +169,27 @@ export interface AcademyStats {
     total_enrollments: number;
     total_completions: number;
     total_assignments: number;
+}
+
+export interface CourseOrder {
+    id: string;
+    order_number: string;
+    course_title: string;
+    course_slug: string;
+    amount_inr: number;
+    currency: string;
+    status: 'pending' | 'paid' | 'failed' | 'refunded';
+    payment_gateway: string;
+    gateway_order_id?: string;
+    billing_name?: string;
+    billing_email?: string;
+    created_at: string;
+}
+
+export interface CourseEntitlement {
+    id: string;
+    course_title: string;
+    course_slug: string;
+    is_active: boolean;
+    granted_at: string;
 }

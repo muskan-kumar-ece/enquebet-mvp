@@ -523,3 +523,118 @@ class CourseProjectBridge(models.Model):
 
     def __str__(self):
         return f"Project Bridge for {self.course.title}"
+
+
+class PaymentGateway(models.TextChoices):
+    RAZORPAY = 'razorpay', 'Razorpay (UPI, Cards, Netbanking)'
+    STRIPE = 'stripe', 'Stripe (International)'
+    SCHOLARSHIP = 'scholarship', 'Admin Scholarship / Grant'
+    SIMULATION = 'simulation', 'Test / Sandbox Simulation'
+
+
+class OrderStatus(models.TextChoices):
+    PENDING = 'pending', 'Pending Payment'
+    PAID = 'paid', 'Payment Successful'
+    FAILED = 'failed', 'Payment Failed'
+    REFUNDED = 'refunded', 'Refunded'
+
+
+class CourseOrder(models.Model):
+    """
+    Tracks commercial purchase intent and payment gateway settlement for paid courses.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order_number = models.CharField(max_length=64, unique=True, db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='course_orders'
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.PROTECT,
+        related_name='orders'
+    )
+    amount_inr = models.PositiveIntegerField(help_text="Amount in INR (e.g. 1999)")
+    currency = models.CharField(max_length=10, default='INR')
+    status = models.CharField(
+        max_length=20,
+        choices=OrderStatus.choices,
+        default=OrderStatus.PENDING,
+        db_index=True
+    )
+    payment_gateway = models.CharField(
+        max_length=20,
+        choices=PaymentGateway.choices,
+        default=PaymentGateway.RAZORPAY
+    )
+    gateway_order_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    gateway_payment_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    gateway_signature = models.CharField(max_length=256, blank=True, default='')
+    billing_email = models.EmailField(blank=True, default='')
+    billing_name = models.CharField(max_length=255, blank=True, default='')
+    error_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'course_orders'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['course', 'status']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Order {self.order_number} - {self.course.title} ({self.get_status_display()})"
+
+
+class CourseEntitlement(models.Model):
+    """
+    Cryptographically immutable authorization proving a learner's commercial entitlement
+    to access a paid course's gated lessons and assignments.
+
+    Separates commercial entitlement from runtime enrollment progress.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='course_entitlements'
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.PROTECT,
+        related_name='entitlements'
+    )
+    order = models.OneToOneField(
+        CourseOrder,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='entitlement'
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='granted_scholarships',
+        help_text="Populated when access is granted by an administrator (scholarship / manual grant)"
+    )
+    revocation_reason = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        db_table = 'course_entitlements'
+        unique_together = [('user', 'course')]
+        ordering = ['-granted_at']
+        indexes = [
+            models.Index(fields=['user', 'course', 'is_active']),
+        ]
+
+    def __str__(self):
+        status_label = 'Active' if self.is_active else 'Revoked'
+        return f"Entitlement: {self.user.username} -> {self.course.title} ({status_label})"

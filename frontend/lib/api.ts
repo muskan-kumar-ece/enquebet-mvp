@@ -1489,6 +1489,44 @@ class ApiClient {
     async getCertificate(certificateCode: string) {
         return this.request<any>(`/courses/certificates/${certificateCode}/`);
     }
+
+    async createCourseOrder(slug: string, payload?: { billing_name?: string; billing_email?: string }) {
+        return this.request<{
+            order_id: string;
+            order_number: string;
+            amount_inr: number;
+            amount_paise: number;
+            currency: string;
+            gateway: string;
+            key_id: string;
+            gateway_order_id: string;
+            course_title: string;
+            course_slug: string;
+        }>(`/courses/${slug}/create-order/`, {
+            method: 'POST',
+            body: JSON.stringify(payload || {}),
+        });
+    }
+
+    async verifyCoursePayment(slug: string, payload: {
+        order_number: string;
+        gateway_payment_id: string;
+        gateway_signature: string;
+    }) {
+        return this.request<{
+            detail: string;
+            order_number: string;
+            status: string;
+            course_slug: string;
+        }>(`/courses/${slug}/verify-payment/`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
+
+    async getCourseOrders() {
+        return this.request<any[]>('/courses/orders/');
+    }
 }
 
 export const api = new ApiClient(API_BASE_URL);

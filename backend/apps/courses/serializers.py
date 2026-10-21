@@ -15,7 +15,12 @@ from .models import (
     CourseCompletion,
     CourseBookmark,
     CourseProjectBridge,
+    CourseOrder,
+    CourseEntitlement,
+    AccessTier,
+    OrderStatus,
 )
+from .permissions import is_academy_admin
 
 User = get_user_model()
 
@@ -344,6 +349,8 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     last_accessed_lesson_id = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
     certificate_code = serializers.SerializerMethodField()
+    is_entitled = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -378,6 +385,8 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'last_accessed_lesson_id',
             'is_bookmarked',
             'certificate_code',
+            'is_entitled',
+            'has_access',
             'created_at',
             'updated_at',
         ]
@@ -426,6 +435,24 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             return e.completion.certificate_code
         return None
 
+    def get_is_entitled(self, obj) -> bool:
+        user = self.context.get('request_user')
+        if not user or not user.is_authenticated:
+            return False
+        if obj.access_tier == AccessTier.FREE and (not obj.price_inr or obj.price_inr == 0):
+            return True
+        return CourseEntitlement.objects.filter(user=user, course=obj, is_active=True).exists()
+
+    def get_has_access(self, obj) -> bool:
+        user = self.context.get('request_user')
+        if not user or not user.is_authenticated:
+            return False
+        if is_academy_admin(user) or obj.creator == user:
+            return True
+        if obj.access_tier == AccessTier.FREE and (not obj.price_inr or obj.price_inr == 0):
+            return self.get_is_enrolled(obj)
+        return CourseEntitlement.objects.filter(user=user, course=obj, is_active=True).exists()
+
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     """Enrolled course list serializer for 'My Learning' tab"""
@@ -472,3 +499,44 @@ class CourseCompletionSerializer(serializers.ModelSerializer):
             'learner_username',
             'learner_avatar',
         ]
+
+
+class CourseOrderSerializer(serializers.ModelSerializer):
+    """Purchase order representation for billing history & receipts"""
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    course_slug = serializers.CharField(source='course.slug', read_only=True)
+
+    class Meta:
+        model = CourseOrder
+        fields = [
+            'id',
+            'order_number',
+            'course_title',
+            'course_slug',
+            'amount_inr',
+            'currency',
+            'status',
+            'payment_gateway',
+            'gateway_order_id',
+            'billing_name',
+            'billing_email',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class CourseEntitlementSerializer(serializers.ModelSerializer):
+    """Lifetime commercial course entitlement representation"""
+    course_title = serializers.CharField(source='course.title', read_only=True)
+    course_slug = serializers.CharField(source='course.slug', read_only=True)
+
+    class Meta:
+        model = CourseEntitlement
+        fields = [
+            'id',
+            'course_title',
+            'course_slug',
+            'is_active',
+            'granted_at',
+        ]
+        read_only_fields = fields

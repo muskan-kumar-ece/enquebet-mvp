@@ -68,6 +68,15 @@ export default function CourseCard({ course, onToggleBookmark }: CourseCardProps
                     <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${diff.bg} ${diff.text} ${diff.border}`}>
                         {diff.label}
                     </span>
+                    {course.price_inr && course.price_inr > 0 ? (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            ₹{course.price_inr.toLocaleString('en-IN')}
+                        </span>
+                    ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-white/10 text-zinc-300 border border-white/20">
+                            Free
+                        </span>
+                    )}
                     {course.is_featured && (
                         <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#1864ff]/20 text-[#60a5fa] border border-[#1864ff]/40">
                             Featured
@@ -199,9 +208,13 @@ export default function CourseCard({ course, onToggleBookmark }: CourseCardProps
 
                             <Link
                                 href={`/courses/${course.slug}`}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-[#1864ff] hover:text-[#60a5fa] transition-colors"
+                                className={`inline-flex items-center gap-1 text-xs font-semibold transition-colors ${
+                                    course.price_inr && course.price_inr > 0
+                                        ? 'text-emerald-400 hover:text-emerald-300'
+                                        : 'text-[#1864ff] hover:text-[#60a5fa]'
+                                }`}
                             >
-                                <span>View Course</span>
+                                <span>{course.price_inr && course.price_inr > 0 ? `Unlock (₹${course.price_inr.toLocaleString('en-IN')})` : 'View Course'}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                             </Link>
                         </div>
