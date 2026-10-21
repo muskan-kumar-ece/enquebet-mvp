@@ -306,6 +306,12 @@ _default_cors_origins = (
 CORS_ALLOWED_ORIGINS = _get_env_list('CORS_ALLOWED_ORIGINS', _default_cors_origins)
 CORS_ALLOW_CREDENTIALS = True
 
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'idempotency-key',
+    'x-razorpay-signature',
+]
+
 # Dynamic regexes for preview branches and brand domains (e.g. *.vercel.app, *.venopai.in)
 _default_cors_regexes = r'^https://.*\.vercel\.app$,^https://.*\.venopai\.in$'
 CORS_ALLOWED_ORIGIN_REGEXES = _get_env_list('CORS_ALLOWED_ORIGIN_REGEXES', _default_cors_regexes)
