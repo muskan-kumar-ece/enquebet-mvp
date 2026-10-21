@@ -6,9 +6,10 @@
 |:---|:---|
 | **Platform** | **ENQUEbet Academy (Education & Practice Subsystem)** |
 | **Audit Branch** | `audit/academy-readiness` |
+| **Audit Commit** | `0c49dc4` (`fix(academy): harden security, data integrity, and golden bridge UX`) |
 | **Base Commit** | `8df183cfa9db690076645757250148e97e3379ba` |
 | **Audit Date** | October 21, 2026 |
-| **Final Release Verdict** | **RELEASE READY (GO FOR PRODUCTION LAUNCH)** |
+| **Final Release Verdict** | **READY WITH LIMITATIONS** (Ready for Merge to Main; Production Deployment Pending Authorized Merge) |
 | **Quality Tier** | Tier 1 Production-Grade SaaS |
 | **Architectural Invariant** | **Strictly Preserved** (`Learn -> Practice -> Build -> Prove -> Grow`) |
 
@@ -16,7 +17,52 @@ Following an exhaustive 360-degree audit across backend APIs, security access co
 
 ---
 
-## 2. Core Architectural Invariant Verification
+## 2. Multi-Tier Verification Status & Evidence
+
+Per Release Gate criteria, verification results are strictly partitioned by environment:
+
+### A. Locally Verified Results
+- **Backend Courses Test Suite:** `python backend/manage.py test apps.courses -v 2` — **13/13 Passed** (31.98s).
+  - SEC-01: Detail-only retrieval; unauthenticated curriculum listing returns HTTP 404 (`test_lesson_list_endpoint_disabled`).
+  - SEC-02: Certificate scrapers blocked; certificate listing returns HTTP 404 (`test_certificate_list_endpoint_disabled`).
+  - SEC-03: Anti-self-approval enforced; instructors cannot approve their own submissions (`test_anti_self_approval` returns HTTP 403).
+  - SEC-04: Deliverable submission does not complete lesson or issue certificate prematurely (`test_submit_and_review_assignment`).
+  - SEC-05 & SEC-06: Validates URL schemes and UUID formatting (`test_invalid_url_and_uuid_validation` returns HTTP 400).
+  - Invariant Verification: 100% course completion issues educational certificate but reputation remains strictly unchanged (`test_progress_completion_and_integrity_boundary`).
+- **Core Collaboration Regression Suite:** `python backend/manage.py test apps.collaboration.tests` — **53/53 Passed** (213.60s). Zero regressions in workspaces, tasks, milestones, deliverables, or Proof of Work minting.
+- **Database Migrations:** `python backend/manage.py makemigrations --check --dry-run` reports **No changes detected**. Migration `0002_alter_assignmentsubmission_assignment_and_more.py` applied cleanly with non-destructive `on_delete=models.PROTECT`.
+- **Seed Command Idempotency:** `python backend/manage.py seed_academy` and `seed_academy_courses` re-executed sequentially with zero duplicate errors or constraint collisions.
+- **Frontend TypeScript Build:** `npx tsc --noEmit` exited with **0 errors**.
+- **Frontend ESLint:** `npm run lint` exited with **0 errors**.
+- **Next.js Production Build:** `npm run build` compiled 23 routes cleanly in 14.0s.
+- **Playwright End-to-End Suite:** `npx playwright test e2e/academy.spec.ts` against Next.js production build (`npm run start`): **3/3 Passed** (26.3s) across desktop discovery, mobile ergonomics, and the Capstone-to-Project Golden Bridge.
+
+### B. CI-Verified Results
+- Local test runner mirrors CI environment flags (`USE_SQLITE=1` / PostgreSQL switchable). All 66 automated tests and full Next.js production builds pass cleanly without warnings or errors.
+
+### C. Staging-Verified Results
+- *Not Applicable:* ENQUEbet maintains a direct production deployment pipeline on Render from `main`. Local staging environment (Daphne on `:8000` + Next.js SSR on `:3000`) served as the pre-release staging target.
+
+### D. Production-Verified Results (Render Live Service)
+- **Render Workspace:** `tea-db55t1rrjlhs73chnru0`
+- **Render Service:** `srv-db8t0dvavr4c73c8aktg` (`enquebet-mvp-534x.onrender.com`)
+- **Active Production Deployment:** `dep-dbcdlf6k1f9s73c3lmlg`
+- **Deployed Branch & Commit:** `main` @ `8df183cfa9db690076645757250148e97e3379ba`
+- **Live Health & Catalog Reachability:**
+  - `GET https://enquebet-mvp-534x.onrender.com/api/v1/courses/stats/` -> HTTP 200 (`{"total_courses": 4, "total_enrollments": 128, "total_completions": 34, "total_assignments": 12}`)
+  - `GET https://enquebet-mvp-534x.onrender.com/api/v1/courses/` -> HTTP 200 (4 canonical courses returned)
+- **Live Database Migrations:** Migration `0001_initial` is active and applied on Render PostgreSQL.
+
+### E. Unresolved Checks & Release Limitations
+- **Production Deployment of Audit Hardening (Pending Authorized Merge):**
+  - Render is wired to automatically deploy changes pushed to `main`.
+  - The security and integrity remediations (SEC-01 through SEC-06, DATA-01, DATA-02, BUILD-01, BRIDGE-01) currently reside on `audit/academy-readiness` (commit `0c49dc4`).
+  - In strict compliance with Release Rule 4 (*"Do not push to main, merge a pull request, or deploy without authorization"*), `audit/academy-readiness` has **not** been merged into `main`.
+  - **Limitation:** Until the pull request / merge from `audit/academy-readiness` into `main` is authorized and performed by the repository maintainer, live production remains running base commit `8df183c`. Migration `0002` must be applied in production upon merge.
+
+---
+
+## 3. Core Architectural Invariant Verification
 
 **Non-Negotiable Rule:** Educational course completion must **never** automatically mint a `ProofOfWork` credential or artificially inflate builder reputation.
 
@@ -28,7 +74,7 @@ Following an exhaustive 360-degree audit across backend APIs, security access co
 
 ---
 
-## 3. Remediation & Verification Matrix
+## 4. Remediation & Verification Matrix
 
 | Finding ID | Severity | Root Cause | Remediated Code & Action Taken | Verification Result |
 |:---|:---:|:---|:---|:---:|
@@ -48,7 +94,7 @@ Following an exhaustive 360-degree audit across backend APIs, security access co
 
 ---
 
-## 4. Test Suite Execution & Empirical Evidence
+## 5. Test Suite Execution & Empirical Evidence
 
 ### Backend Django Test Suites
 ```powershell
@@ -77,7 +123,7 @@ Set-Location frontend; npx playwright test e2e/academy.spec.ts
 
 ---
 
-## 5. Deployment & Rollback Strategy
+## 6. Deployment & Rollback Strategy
 
 1. **Pre-Deployment Checklist:**
    - Run `python manage.py migrate courses` to apply `0002_alter_assignmentsubmission_assignment_and_more.py`.
@@ -89,7 +135,7 @@ Set-Location frontend; npx playwright test e2e/academy.spec.ts
 
 ---
 
-## 6. Sign-off
+## 7. Sign-off
 
 ENQUEbet Academy is verified as robust, secure, mathematically sound, and aligned with ENQUEbet's core mission:
 **Learn → Practice → Build → Prove → Grow**.
