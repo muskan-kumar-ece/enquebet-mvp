@@ -41,7 +41,7 @@ export default function CourseCard({ course, onToggleBookmark }: CourseCardProps
     const diff = DIFFICULTY_STYLE[course.difficulty] || DIFFICULTY_STYLE.beginner;
     const isEnrolled = Boolean(course.is_enrolled);
     const progress = course.progress_percent || 0;
-    const isCompleted = progress >= 100 || course.status === 'completed';
+    const isCompleted = progress >= 100;
 
     return (
         <div className="group relative flex flex-col justify-between rounded-2xl border border-[#1b1e2c] bg-[#0c0d15] hover:border-[#2a2f45] hover:bg-[#0f111a] transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md">

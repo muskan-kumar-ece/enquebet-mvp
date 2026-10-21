@@ -114,7 +114,7 @@ export default function AssignmentWorkbench({
         starter_repo: assignment.starter_repo_url || '',
         ref: 'academy_assignment',
     });
-    const bridgeHref = `/collaboration?${bridgeParams.toString()}`;
+    const bridgeHref = `/create?${bridgeParams.toString()}`;
 
     const statusBadge = activeSubmission ? STATUS_BADGE[activeSubmission.status] : null;
 

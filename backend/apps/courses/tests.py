@@ -199,8 +199,12 @@ class EnrollmentAndProgressTests(AcademyBaseTestCase):
 class AssignmentWorkflowTests(AcademyBaseTestCase):
     """Assignment submission and instructor review tests"""
     def test_submit_and_review_assignment(self):
-        Enrollment.objects.create(user=self.learner, course=self.course)
+        enrollment = Enrollment.objects.create(user=self.learner, course=self.course)
         self.client.force_authenticate(user=self.learner)
+
+        # Attach assignment to lesson 2
+        self.assignment.lesson = self.lesson2
+        self.assignment.save(update_fields=['lesson'])
 
         # Submit deliverable
         sub_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
@@ -210,7 +214,11 @@ class AssignmentWorkflowTests(AcademyBaseTestCase):
         self.assertEqual(sub_res.status_code, status.HTTP_201_CREATED)
         submission_id = sub_res.data['submission']['id']
 
-        # Review as instructor
+        # Ensure submitting alone does NOT mark lesson complete (SEC-04 fix verification)
+        progress = LessonProgress.objects.filter(enrollment=enrollment, lesson=self.lesson2).first()
+        self.assertTrue(progress is None or not progress.is_completed)
+
+        # Review as instructor with approval
         self.client.force_authenticate(user=self.instructor)
         review_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
             'submission_id': submission_id,
@@ -219,6 +227,74 @@ class AssignmentWorkflowTests(AcademyBaseTestCase):
         })
         self.assertEqual(review_res.status_code, status.HTTP_200_OK)
         self.assertEqual(review_res.data['submission']['status'], 'approved')
+
+        # Now lesson 2 progress must be completed
+        progress = LessonProgress.objects.filter(enrollment=enrollment, lesson=self.lesson2).first()
+        self.assertIsNotNone(progress)
+        self.assertTrue(progress.is_completed)
+
+    def test_anti_self_approval(self):
+        """Instructors cannot approve their own assignment submissions"""
+        Enrollment.objects.create(user=self.instructor, course=self.course)
+        self.client.force_authenticate(user=self.instructor)
+
+        sub_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
+            'repository_url': 'https://github.com/instructor/solution',
+            'submission_text': 'My own submission.'
+        })
+        self.assertEqual(sub_res.status_code, status.HTTP_201_CREATED)
+        submission_id = sub_res.data['submission']['id']
+
+        # Attempt to approve own submission
+        review_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
+            'submission_id': submission_id,
+            'status': SubmissionStatus.APPROVED,
+            'feedback': 'Self approval should fail.'
+        })
+        self.assertEqual(review_res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_url_and_uuid_validation(self):
+        """Ensures bad URLs and malformed UUIDs are rejected with 400 Bad Request"""
+        Enrollment.objects.create(user=self.learner, course=self.course)
+        self.client.force_authenticate(user=self.learner)
+
+        # Disallowed URL scheme (e.g. javascript:)
+        bad_url_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/submit/', {
+            'repository_url': 'javascript:alert("XSS")',
+            'submission_text': 'Exploit attempt.'
+        })
+        self.assertEqual(bad_url_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Malformed submission UUID in review
+        self.client.force_authenticate(user=self.instructor)
+        bad_uuid_res = self.client.post(f'/api/v1/courses/assignments/{self.assignment.id}/review/', {
+            'submission_id': 'not-a-valid-uuid',
+            'status': SubmissionStatus.APPROVED,
+        })
+        self.assertEqual(bad_uuid_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityAndAccessControlTests(AcademyBaseTestCase):
+    """Verifies prevention of curriculum leak, certificate scraping, and premium bypass"""
+    def test_lesson_list_endpoint_disabled(self):
+        """Anonymous or authenticated users cannot dump all curriculum via GET /lessons/"""
+        res = self.client.get('/api/v1/courses/lessons/')
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED])
+
+    def test_certificate_list_endpoint_disabled(self):
+        """Public users cannot scrape or enumerate certificates via GET /certificates/"""
+        res = self.client.get('/api/v1/courses/certificates/')
+        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED])
+
+    def test_premium_course_enrollment_protection(self):
+        """Learners cannot self-enroll in premium courses without administrative authorization"""
+        self.course.access_tier = AccessTier.PREMIUM
+        self.course.price_inr = 4999
+        self.course.save(update_fields=['access_tier', 'price_inr'])
+
+        self.client.force_authenticate(user=self.learner)
+        res = self.client.post(f'/api/v1/courses/{self.course.slug}/enroll/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class CourseBookmarkTests(AcademyBaseTestCase):

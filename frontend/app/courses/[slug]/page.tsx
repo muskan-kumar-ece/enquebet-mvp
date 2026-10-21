@@ -55,7 +55,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
     const handleEnroll = async () => {
         if (!isAuthenticated) {
             toast.error('Please sign in to enroll in this course.');
-            router.push('/login?next=/courses/' + slug);
+            router.push('/auth/login?next=/courses/' + slug);
             return;
         }
 

@@ -8,7 +8,7 @@ def is_academy_admin(user):
     """Check if user has admin/staff privileges across the platform"""
     if not user or not user.is_authenticated:
         return False
-    return bool(user.is_staff or user.is_superuser or getattr(user, 'role', '') in ['admin', 'superadmin', 'moderator'])
+    return bool(user.is_staff or user.is_superuser)
 
 
 class IsCourseInstructorOrAdmin(BasePermission):

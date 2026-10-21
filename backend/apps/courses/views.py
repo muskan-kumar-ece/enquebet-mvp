@@ -2,10 +2,13 @@
 API Views and ViewSets for ENQUEbet Academy
 """
 import uuid
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import URLValidator
+from django.db import transaction
 from django.db.models import Count, Q, Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
@@ -199,6 +202,10 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
         if course.status != CourseStatus.PUBLISHED and not is_academy_admin(request.user):
             raise ValidationError("Cannot enroll in an unpublished course.")
 
+        if course.access_tier == AccessTier.PREMIUM or (course.price_inr and course.price_inr > 0):
+            if not is_academy_admin(request.user) and course.creator != request.user:
+                raise PermissionDenied("Enrollment in premium courses requires payment verification or administrative grant.")
+
         enrollment, created = Enrollment.objects.get_or_create(
             user=request.user,
             course=course,
@@ -288,9 +295,10 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
         })
 
 
-class LessonViewSet(viewsets.ReadOnlyModelViewSet):
+class LessonViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
     Focused lesson player endpoint, progress updates, and playback position sync.
+    List endpoint is explicitly omitted to prevent private curriculum enumeration.
     """
     queryset = Lesson.objects.select_related('module__course__creator')
     serializer_class = LessonDetailSerializer
@@ -335,27 +343,28 @@ class LessonViewSet(viewsets.ReadOnlyModelViewSet):
         if not enrollment:
             raise ValidationError("You must be enrolled in this course to track progress.")
 
-        progress, _ = LessonProgress.objects.get_or_create(
-            enrollment=enrollment,
-            lesson=lesson
-        )
+        with transaction.atomic():
+            progress, _ = LessonProgress.objects.get_or_create(
+                enrollment=enrollment,
+                lesson=lesson
+            )
 
-        desired_state = request.data.get('is_completed')
-        if desired_state is None:
-            # Toggle current state
-            progress.is_completed = not progress.is_completed
-        else:
-            progress.is_completed = bool(desired_state)
+            desired_state = request.data.get('is_completed')
+            if desired_state is None:
+                # Toggle current state
+                progress.is_completed = not progress.is_completed
+            else:
+                progress.is_completed = bool(desired_state)
 
-        if progress.is_completed:
-            progress.completed_at = timezone.now()
-        else:
-            progress.completed_at = None
+            if progress.is_completed:
+                progress.completed_at = timezone.now()
+            else:
+                progress.completed_at = None
 
-        progress.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+            progress.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
 
-        # Recalculate enrollment progress
-        new_percent = enrollment.recalculate_progress()
+            # Recalculate enrollment progress
+            new_percent = enrollment.recalculate_progress()
 
         return Response({
             'lesson_id': str(lesson.id),
@@ -432,6 +441,19 @@ class AssignmentViewSet(viewsets.ReadOnlyModelViewSet):
         if not repo_url and not deliverable_url and not submission_text:
             raise ValidationError("Must provide a repository URL, deliverable URL, or submission text.")
 
+        url_validator = URLValidator(schemes=['http', 'https'])
+        if repo_url:
+            try:
+                url_validator(repo_url)
+            except DjangoValidationError:
+                raise ValidationError({"repository_url": "Must be a valid HTTP or HTTPS URL."})
+
+        if deliverable_url:
+            try:
+                url_validator(deliverable_url)
+            except DjangoValidationError:
+                raise ValidationError({"deliverable_url": "Must be a valid HTTP or HTTPS URL."})
+
         submission, created = AssignmentSubmission.objects.get_or_create(
             assignment=assignment,
             learner=user,
@@ -450,16 +472,7 @@ class AssignmentViewSet(viewsets.ReadOnlyModelViewSet):
             submission.status = SubmissionStatus.SUBMITTED
             submission.save()
 
-        # If attached to a lesson, mark lesson progress complete
-        if assignment.lesson:
-            enrollment = Enrollment.objects.filter(user=user, course=assignment.course).first()
-            if enrollment:
-                progress, _ = LessonProgress.objects.get_or_create(enrollment=enrollment, lesson=assignment.lesson)
-                progress.is_completed = True
-                progress.completed_at = timezone.now()
-                progress.save()
-                enrollment.recalculate_progress()
-
+        # Deliverable submitted for instructor review; lesson is completed upon approval.
         serializer = AssignmentSubmissionSerializer(submission)
         return Response({
             'detail': 'Deliverable submitted for review.',
@@ -479,15 +492,39 @@ class AssignmentViewSet(viewsets.ReadOnlyModelViewSet):
         verdict = request.data.get('status')
         feedback = request.data.get('feedback', '').strip()
 
+        if not submission_id:
+            raise ValidationError({"submission_id": "Submission ID is required."})
+
+        try:
+            submission_uuid = uuid.UUID(str(submission_id))
+        except (ValueError, TypeError):
+            raise ValidationError({"submission_id": "Invalid submission UUID format."})
+
         if verdict not in [SubmissionStatus.APPROVED, SubmissionStatus.CHANGES_REQUESTED]:
             raise ValidationError("Status must be either 'approved' or 'changes_requested'.")
 
-        submission = get_object_or_404(AssignmentSubmission, id=submission_id, assignment=assignment)
+        submission = get_object_or_404(AssignmentSubmission, id=submission_uuid, assignment=assignment)
+
+        # Enforce anti-self-approval invariant
+        if submission.learner == request.user and not request.user.is_superuser:
+            raise PermissionDenied("Instructors cannot review or approve their own submissions.")
+
         submission.status = verdict
         submission.feedback = feedback
         submission.reviewer = request.user
         submission.reviewed_at = timezone.now()
-        submission.save()
+        submission.save(update_fields=['status', 'feedback', 'reviewer', 'reviewed_at'])
+
+        # If approved and attached to a lesson, mark lesson complete
+        if verdict == SubmissionStatus.APPROVED and assignment.lesson:
+            enrollment = Enrollment.objects.filter(user=submission.learner, course=assignment.course).first()
+            if enrollment:
+                progress, _ = LessonProgress.objects.get_or_create(enrollment=enrollment, lesson=assignment.lesson)
+                if not progress.is_completed:
+                    progress.is_completed = True
+                    progress.completed_at = timezone.now()
+                    progress.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+                    enrollment.recalculate_progress()
 
         return Response({
             'detail': f'Submission marked as {verdict}.',
@@ -495,10 +532,11 @@ class AssignmentViewSet(viewsets.ReadOnlyModelViewSet):
         })
 
 
-class CourseCompletionViewSet(viewsets.ReadOnlyModelViewSet):
+class CourseCompletionViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
     Public verification endpoint for educational completion certificates.
     e.g. GET /api/v1/courses/certificates/ENQ-ACAD-2026-XXXX/
+    List endpoint is explicitly omitted to prevent student certificate scraping.
     """
     queryset = CourseCompletion.objects.select_related('enrollment__course', 'enrollment__user')
     serializer_class = CourseCompletionSerializer

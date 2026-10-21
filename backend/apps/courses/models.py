@@ -2,7 +2,7 @@
 ENQUEbet Academy — Course, Curriculum, Enrollment & Learning Models
 """
 import uuid
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -128,7 +128,7 @@ class Course(models.Model):
     thumbnail_url = models.URLField(max_length=500, blank=True, default='')
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='created_courses'
     )
     status = models.CharField(
@@ -313,15 +313,17 @@ class Enrollment(models.Model):
             self.completed_at = timezone.now()
             self.save(update_fields=['progress_percent', 'status', 'completed_at'])
 
-            # Issue educational certificate if not already issued
-            if not hasattr(self, 'completion'):
+            # Issue educational certificate if not already issued (thread-safe)
+            with transaction.atomic():
                 year = timezone.now().year
                 short_hash = uuid.uuid4().hex[:8].upper()
                 cert_code = f"ENQ-ACAD-{year}-{short_hash}"
-                CourseCompletion.objects.create(
+                CourseCompletion.objects.get_or_create(
                     enrollment=self,
-                    certificate_code=cert_code,
-                    grade_summary={'completed_lessons': completed_count, 'total_lessons': total_lessons}
+                    defaults={
+                        'certificate_code': cert_code,
+                        'grade_summary': {'completed_lessons': completed_count, 'total_lessons': total_lessons}
+                    }
                 )
         else:
             self.save(update_fields=['progress_percent'])
@@ -405,7 +407,7 @@ class AssignmentSubmission(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     assignment = models.ForeignKey(
         Assignment,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='submissions'
     )
     learner = models.ForeignKey(
